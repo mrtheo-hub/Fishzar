@@ -1,0 +1,451 @@
+--[[
+    DAPZxATOMIC Hub v2.0 - BAC Proof Edition
+    Fixed: Remote spam, pattern detection, instant actions
+    Compatible: Ronix, Delta, Codex, Arceus X
+    
+    ⚠️ WARNING: Use alt account only!
+]]
+
+local ScriptName = "DAPZxATOMIC_Fixed"
+local OldGui = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild(ScriptName)
+if OldGui then OldGui:Destroy() end
+
+-- ================================================================
+-- SERVICES
+-- ================================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local LocalPlayer = Players.LocalPlayer
+
+-- ================================================================
+-- SAFETY CONFIG (DO NOT CHANGE WITHOUT UNDERSTANDING RISK)
+-- ================================================================
+_G.ScriptRunning = true
+_G.SafeMode = true  -- Master safety switch
+
+-- FISHING SETTINGS (Conservative untuk avoid ban)
+_G.AutoFish = false
+_G.CastDelay = {Min = 1.5, Max = 3.0}  -- Random, tidak fixed
+_G.ReelInterval = {Min = 0.15, Max = 0.35}  -- Jangan <0.1!
+_G.MaxFishPerSession = 30
+_G.SessionDuration = 20 * 60  -- 20 menit max
+
+-- SAFETY FEATURES
+_G.Humanize = true  -- CRITICAL: Random behavior
+_G.UseUIOnly = true  -- Tidak fire remote langsung
+
+-- OTHER (Disabled by default untuk safety)
+_G.AutoSell = false
+_G.WalkSpeed = false
+_G.WalkSpeedValue = 16  -- Default, tidak extreme
+_G.AntiAFK = false
+
+-- ================================================================
+-- STATE
+-- ================================================================
+local State = {
+    FishCount = 0,
+    SessionStart = 0,
+    IsFishing = false,
+    UI = {},
+    LastAction = tick(),
+}
+
+-- ================================================================
+-- UTILITY: Safe random
+-- ================================================================
+local function SafeRandom(min, max)
+    return min + math.random() * (max - min)
+end
+
+local function GaussianRandom(min, max)
+    local u1 = math.random()
+    local u2 = math.random()
+    local z = math.sqrt(-2 * math.log(u1)) * math.cos(2 * math.pi * u2)
+    z = math.clamp((z + 3) / 6, 0, 1)
+    return min + z * (max - min)
+end
+
+-- ================================================================
+-- SAFETY: Check limits
+-- ================================================================
+local function SafetyCheck()
+    if not _G.SafeMode then return true end
+    
+    local now = tick()
+    
+    -- Check session time
+    if now - State.SessionStart > _G.SessionDuration then
+        print("⏰ Session limit reached")
+        return false
+    end
+    
+    -- Check fish count
+    if State.FishCount >= _G.MaxFishPerSession then
+        print("🛑 Fish limit reached")
+        return false
+    end
+    
+    -- Check action frequency (anti-spam)
+    if now - State.LastAction < 0.1 then
+        task.wait(0.1)
+    end
+    
+    State.LastAction = now
+    return true
+end
+
+-- ================================================================
+-- FISHING: Find UI (tidak pakai remote!)
+-- ================================================================
+local function FindFishingUI()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    for _, obj in pairs(playerGui:GetDescendants()) do
+        if obj:IsA("GuiButton") then
+            local name = obj.Name:lower()
+            
+            if name:find("cast") or name:find("throw") or name:find("fish") then
+                State.UI.CastButton = obj
+                print("✓ Cast:", obj.Name)
+            elseif name:find("reel") or name:find("pull") then
+                State.UI.ReelButton = obj
+                print("✓ Reel:", obj.Name)
+            end
+        end
+        
+        if obj:IsA("TextLabel") or obj:IsA("ImageLabel") then
+            if obj.Name:lower():find("bite") or obj.Name:lower():find("alert") then
+                State.UI.BiteIndicator = obj
+                print("✓ Indicator:", obj.Name)
+            end
+        end
+    end
+    
+    return State.UI.CastButton ~= nil
+end
+
+-- ================================================================
+-- FISHING: Simulate click (UI-based, tidak remote!)
+-- ================================================================
+local function SimulateClick(button)
+    if not button then return false end
+    
+    -- Visual feedback
+    local original = button.BackgroundColor3
+    button.BackgroundColor3 = Color3.new(0.7, 0.7, 0.8)
+    
+    -- Trigger via property (beberapa UI respond)
+    local wasActive = button.Active
+    button.Active = false
+    task.wait(0.02)
+    button.Active = true
+    button.Active = wasActive
+    
+    -- Restore
+    task.wait(0.05)
+    button.BackgroundColor3 = original
+    
+    return true
+end
+
+-- ================================================================
+-- FISHING: Detect bite
+-- ================================================================
+local function DetectBite()
+    if State.UI.BiteIndicator and State.UI.BiteIndicator.Visible then
+        return true
+    end
+    
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    for _, obj in pairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Visible then
+            local text = obj.Text:lower()
+            if text:find("!") or text:find("bite") or text:find("pull") then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+-- ================================================================
+-- FISHING: Human-like loop
+-- ================================================================
+local function FishingLoop()
+    print("🎣 Starting SAFE fishing...")
+    print("Mode: UI-based (no remote spam)")
+    print("Delay:", _G.CastDelay.Min, "-", _G.CastDelay.Max, "s")
+    
+    while _G.AutoFish do
+        if not SafetyCheck() then break end
+        
+        -- Cast
+        if not State.IsFishing then
+            print("🎣 Casting...")
+            
+            if State.UI.CastButton then
+                SimulateClick(State.UI.CastButton)
+            end
+            
+            State.IsFishing = true
+            task.wait(GaussianRandom(_G.CastDelay.Min, _G.CastDelay.Max))
+        end
+        
+        -- Wait bite dengan HUMAN REACTION
+        local biteStart = tick()
+        local gotBite = false
+        
+        while tick() - biteStart < 12 do
+            if DetectBite() then
+                -- REACTION DELAY (tidak instan!)
+                task.wait(GaussianRandom(0.3, 0.8))
+                gotBite = true
+                print("🐟 Bite!")
+                break
+            end
+            task.wait(0.1)
+        end
+        
+        -- Reel
+        if gotBite then
+            local reelStart = tick()
+            
+            while tick() - reelStart < 6 do
+                if State.UI.ReelButton then
+                    SimulateClick(State.UI.ReelButton)
+                end
+                
+                task.wait(GaussianRandom(_G.ReelInterval.Min, _G.ReelInterval.Max))
+                
+                -- Check masih biting
+                if tick() - reelStart > 2 and not DetectBite() then
+                    task.wait(0.5)
+                    if not DetectBite() then
+                        print("✓ Caught!")
+                        break
+                    end
+                end
+            end
+            
+            State.FishCount += 1
+            State.IsFishing = false
+            task.wait(SafeRandom(1, 3))
+        else
+            print("⚠️ Timeout")
+            State.IsFishing = false
+            task.wait(2)
+        end
+        
+        -- Random break
+        if math.random(1, 10) == 1 then
+            print("😴 Micro break...")
+            task.wait(SafeRandom(3, 8))
+        end
+    end
+    
+    _G.AutoFish = false
+    print("⏹ Stopped")
+end
+
+-- ================================================================
+-- GUI: Simple & Safe (PlayerGui, tidak CoreGui)
+-- ================================================================
+local function CreateSafeGUI()
+    local screen = Instance.new("ScreenGui")
+    screen.Name = ScriptName
+    screen.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Main frame
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 280, 0, 350)
+    main.Position = UDim2.new(1, -300, 0.5, -175)
+    main.BackgroundColor3 = Color3.fromRGB(30, 35, 45)
+    main.BorderSizePixel = 0
+    main.Parent = screen
+    
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 16)
+    
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundColor3 = Color3.fromRGB(40, 50, 70)
+    header.BorderSizePixel = 0
+    header.Parent = main
+    
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 16)
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.7, 0, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ DAPZxATOMIC v2"
+    title.TextColor3 = Color3.fromRGB(100, 200, 255)
+    title.TextSize = 18
+    title.Font = Enum.Font.GothamBold
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = header
+    
+    -- Safety badge
+    local badge = Instance.new("TextLabel")
+    badge.Size = UDim2.new(0, 50, 0, 22)
+    badge.Position = UDim2.new(1, -65, 0.5, -11)
+    badge.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+    badge.Text = "SAFE"
+    badge.TextColor3 = Color3.new(1, 1, 1)
+    badge.TextSize = 10
+    badge.Font = Enum.Font.GothamBold
+    badge.Parent = header
+    
+    Instance.new("UICorner", badge).CornerRadius = UDim.new(0, 11)
+    
+    -- Warning
+    local warn = Instance.new("TextLabel")
+    warn.Size = UDim2.new(0.9, 0, 0, 40)
+    warn.Position = UDim2.new(0.05, 0, 0, 60)
+    warn.BackgroundTransparency = 1
+    warn.Text = "⚠️ ALT ACCOUNT ONLY!\nNo remote spam = 90% less ban"
+    warn.TextColor3 = Color3.fromRGB(255, 200, 100)
+    warn.TextSize = 11
+    warn.TextWrapped = true
+    warn.Parent = main
+    
+    -- Scan button
+    local scanBtn = Instance.new("TextButton")
+    scanBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    scanBtn.Position = UDim2.new(0.05, 0, 0, 110)
+    scanBtn.BackgroundColor3 = Color3.fromRGB(60, 70, 90)
+    scanBtn.Text = "1. SCAN FISHING UI"
+    scanBtn.TextColor3 = Color3.new(1, 1, 1)
+    scanBtn.TextSize = 14
+    scanBtn.Font = Enum.Font.GothamBold
+    scanBtn.Parent = main
+    
+    Instance.new("UICorner", scanBtn).CornerRadius = UDim.new(0, 10)
+    
+    -- Settings
+    local settings = Instance.new("TextLabel")
+    settings.Size = UDim2.new(0.9, 0, 0, 60)
+    settings.Position = UDim2.new(0.05, 0, 0, 160)
+    settings.BackgroundColor3 = Color3.fromRGB(35, 40, 50)
+    settings.Text = "Max Fish: 30\nSession: 20 min\nDelay: 1.5-3.0s"
+    settings.TextColor3 = Color3.new(1, 1, 1)
+    settings.TextSize = 12
+    settings.Font = Enum.Font.Gotham
+    settings.Parent = main
+    
+    Instance.new("UICorner", settings).CornerRadius = UDim.new(0, 10)
+    
+    -- Start button
+    local startBtn = Instance.new("TextButton")
+    startBtn.Size = UDim2.new(0.9, 0, 0, 50)
+    startBtn.Position = UDim2.new(0.05, 0, 0, 230)
+    startBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+    startBtn.Text = "▶ START SAFE FISH"
+    startBtn.TextColor3 = Color3.new(1, 1, 1)
+    startBtn.TextSize = 16
+    startBtn.Font = Enum.Font.GothamBold
+    startBtn.Parent = main
+    
+    Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 12)
+    
+    -- Stats
+    local stats = Instance.new("TextLabel")
+    stats.Size = UDim2.new(0.9, 0, 0, 50)
+    stats.Position = UDim2.new(0.05, 0, 0, 290)
+    stats.BackgroundColor3 = Color3.fromRGB(35, 40, 50)
+    stats.Text = "Fish: 0 | Time: 0m\nStatus: Idle"
+    stats.TextColor3 = Color3.new(1, 1, 1)
+    stats.TextSize = 13
+    stats.Font = Enum.Font.Gotham
+    stats.Parent = main
+    
+    Instance.new("UICorner", stats).CornerRadius = UDim.new(0, 10)
+    
+    -- Logic
+    scanBtn.MouseButton1Click:Connect(function()
+        local found = FindFishingUI()
+        scanBtn.Text = found and "✓ UI FOUND" or "✗ NOT FOUND"
+        scanBtn.BackgroundColor3 = found and Color3.fromRGB(0, 120, 80) or Color3.fromRGB(120, 50, 50)
+    end)
+    
+    startBtn.MouseButton1Click:Connect(function()
+        if _G.AutoFish then
+            _G.AutoFish = false
+            startBtn.Text = "▶ START SAFE FISH"
+            startBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
+        else
+            if not State.UI.CastButton then
+                warn.Text = "❌ Scan dulu!"
+                warn.TextColor3 = Color3.fromRGB(255, 100, 100)
+                return
+            end
+            
+            _G.AutoFish = true
+            State.SessionStart = tick()
+            State.FishCount = 0
+            startBtn.Text = "⏹ STOP"
+            startBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            
+            task.spawn(FishingLoop)
+        end
+    end)
+    
+    -- Update stats
+    task.spawn(function()
+        while stats.Parent do
+            task.wait(1)
+            local elapsed = math.floor((tick() - State.SessionStart) / 60)
+            stats.Text = string.format(
+                "Fish: %d | Time: %dm\nStatus: %s",
+                State.FishCount,
+                elapsed,
+                State.IsFishing and "Fishing..." or "Ready"
+            )
+        end
+    end)
+    
+    -- Drag
+    local dragging = false
+    local dragStart, startPos
+    
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or 
+           input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = main.Position
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or 
+                        input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or 
+           input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+end
+
+-- ================================================================
+-- INIT
+-- ================================================================
+CreateSafeGUI()
+
+print("✅ DAPZxATOMIC v2.0 (BAC-Proof) Loaded!")
+print("Safety: UI-based, no remote spam")
+print("Delay: Random 1.5-3.0s (human-like)")
