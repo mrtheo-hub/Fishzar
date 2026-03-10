@@ -1,4 +1,4 @@
--- [[ DAPZX ATOMIC | FISHZAR V20.0.0 - MANCING LOCKED ]]
+-- [[ DAPZX ATOMIC | FISHZAR V21.0.0 - MASTER RECOVERY ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -9,28 +9,60 @@ local Stats = game:GetService("Stats")
 local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
 local AnimController = require(FishingSystem.FishingModules:WaitForChild("AnimationController"))
 
-_G.Config = {Farming = false, Delay = 3, Webhook = "", WalkWater = false, Drown = false, Streamer = false, AntiStaff = false}
+_G.Config = {Farming = false, Delay = 3, Webhook = "", WalkWater = false, Drown = false, Streamer = false, AntiStaff = false, AutoSell = false}
 _G.RarityFilter = {["Legendary"]=true, ["Epic"]=true, ["Rare"]=true, ["Uncommon"]=true, ["Common"]=true}
 
--- [[ 1. UI SETUP ]]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar v20", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460), OpenButton = {Enabled = true, Title = "Open"}})
+local Window = WindUI:CreateWindow({Title = "DapzX Atomic V21", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460), OpenButton = {Enabled = true, Title = "Open"}})
 
--- TABS (Dibuat di awal agar tidak hilang)
-local MainTab = Window:Tab({Title = "Main", Icon = "solar:home-smile-bold"})
-local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
-local UTab = Window:Tab({Title = "Utilities", Icon = "solar:shield-keyhole-bold"})
-local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+-- [[ TAB DEFINITIONS ]]
+local Tabs = {
+    Main = Window:Tab({Title = "Main", Icon = "solar:home-smile-bold"}),
+    Player = Window:Tab({Title = "Player", Icon = "solar:user-bold"}),
+    Fishing = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"}),
+    Shop = Window:Tab({Title = "Shop", Icon = "solar:bag-bold"}),
+    Teleport = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"}),
+    Utilities = Window:Tab({Title = "Utilities", Icon = "solar:shield-keyhole-bold"}),
+    Performance = Window:Tab({Title = "Performance", Icon = "solar:bolt-bold"}),
+    Integration = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+}
 
--- [TAB MAIN - COPYRIGHT]
-MainTab:Section({Title = "© 2026 DapzX Team. All Rights Reserved."})
-MainTab:Section({Title = "Hak Cipta: Kode privat dilindungi hukum."})
-MainTab:Button({Title = "Copy Discord", Callback = function() setclipboard("https://discord.gg/getsades") end})
+-- [[ TAB CONTENTS ]]
+Tabs.Main:Section({Title = "© 2026 DapzX Team. All Rights Reserved."})
+Tabs.Main:Section({Title = "Hak Cipta: Dilarang mendistribusikan ulang kode ini."})
+Tabs.Main:Button({Title = "Copy Discord", Callback = function() setclipboard("https://discord.gg/getsades") end})
+Tabs.Main:Section({Title = "📢 Changelog v21.0.0"})
+Tabs.Main:Section({Title = "• FIX: Seluruh Tab dipulihkan via Array Table.\n• FIX: Logic Mancing kembali ke V5.5.0 (Locked).\n• FIX: Streamer Mode & Ping Stats (Live Update).\n• ADDED: Anti-AFK & Webhook Rarity.", TextSize = 12})
 
--- [TAB FISHING - LOGIKA MANCING YANG ASLI (LOCKED)]
-FTab:Toggle({Title = "Auto Farm", Callback = function(s) _G.Config.Farming = s end})
-FTab:Input({Title = "Delay", Placeholder = "3.0", Callback = function(v) _G.Config.Delay = tonumber(v) or 3 end})
+Tabs.Player:Toggle({Title = "Walk on Water", Callback = function(s) _G.Config.WalkWater = s end})
+Tabs.Player:Toggle({Title = "Anti AFK", Callback = function(s) _G.Config.AntiAFK = s end})
+Tabs.Player:Toggle({Title = "Anti Drown", Callback = function(s) _G.Config.Drown = s end})
 
+Tabs.Fishing:Toggle({Title = "Auto Farm", Callback = function(s) _G.Config.Farming = s end})
+Tabs.Fishing:Input({Title = "Delay", Placeholder = "3.0", Callback = function(v) _G.Config.Delay = tonumber(v) or 3 end})
+
+Tabs.Shop:Toggle({Title = "Auto Sell", Callback = function(s) _G.Config.AutoSell = s end})
+
+local Islands = {["Nelayan"]=Vector3.new(-34,14,256), ["Aquarist"]=Vector3.new(-2032,13,-833), ["Crystaliz"]=Vector3.new(203,13,-2614), ["Megalodon"]=Vector3.new(3125,9,-1713)}
+for n,p in pairs(Islands) do Tabs.Teleport:Button({Title=n, Callback=function() LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(p) end}) end
+
+Tabs.Utilities:Toggle({Title = "Streamer Mode", Callback = function(s) _G.Config.Streamer = s end})
+Tabs.Utilities:Toggle({Title = "Anti Staff", Callback = function(s) _G.Config.AntiStaff = s end})
+local PingL = Tabs.Utilities:Section({Title = "Ping: 0ms"})
+local FPSL = Tabs.Utilities:Section({Title = "FPS: 0"})
+
+Tabs.Performance:Button({Title = "FPS Booster", Callback = function() for _,v in pairs(workspace:GetDescendants()) do if v:IsA("Decal") or v:IsA("Texture") then v:Destroy() end end end})
+
+Tabs.Integration:Input({Title = "Webhook URL", Callback = function(v) _G.Config.Webhook = v end})
+
+-- [[ LOOPS ]]
+RunService.Heartbeat:Connect(function()
+    PingL:SetTitle("Ping: "..math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()).."ms")
+    FPSL:SetTitle("FPS: "..math.floor(workspace:GetRealTimePhysicsFPS()))
+    if _G.Config.Streamer then for _,p in pairs(Players:GetPlayers()) do if p.Character and p.Character:FindFirstChild("Head") then for _,v in pairs(p.Character.Head:GetChildren()) do if v:IsA("BillboardGui") then v.Enabled = false end end end end end
+end)
+
+-- [[ MANCING (LOCKED) ]]
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -42,40 +74,16 @@ task.spawn(function()
                     local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
                     AnimController:Play("PrepareCast", 0.1)
                     FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                    task.wait(1.5)
-                    FishingSystem.PrecalcFish:InvokeServer()
-                    task.wait(0.5)
+                    task.wait(1.5); FishingSystem.PrecalcFish:InvokeServer(); task.wait(0.5)
                     FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
                     task.wait(_G.Config.Delay)
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    task.wait(0.3)
-                    FishingSystem.CleanupCast:FireServer()
-                    AnimController:Play("EquippedAnimation", 0.3)
-                    task.wait(1.5)
+                    task.wait(0.3); FishingSystem.CleanupCast:FireServer()
+                    AnimController:Play("EquippedAnimation", 0.3); task.wait(1.5)
                 end
             end)
         end
     end
 end)
 
--- [TAB UTILITIES]
-UTab:Toggle({Title = "Streamer Mode", Callback = function(s) _G.Config.Streamer = s end})
-local PingL = UTab:Section({Title = "Ping: Loading..."})
-
--- [TAB INTEGRATION]
-ITab:Input({Title = "Webhook URL", Callback = function(v) _G.Config.Webhook = v end})
-
--- [HEARTBEAT UTILITIES]
-RunService.Heartbeat:Connect(function()
-    if PingL then PingL:SetTitle("Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms") end
-    if _G.Config.Streamer then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p.Character and p.Character:FindFirstChild("Head") then
-                for _, v in pairs(p.Character.Head:GetChildren()) do if v:IsA("BillboardGui") then v.Enabled = false end end
-            end
-        end
-    end
-end)
-
--- [ANTI AFK]
 LocalPlayer.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
