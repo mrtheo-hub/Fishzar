@@ -1,5 +1,4 @@
--- [[ DapzX Atomic - Version 3.2 (Safe Bypass Edition) ]] --
--- Update: Adjustable Catch Delay & Anti-AFK
+-- [[ DapzX Atomic - Version 3.3 (Final Fix) ]] --
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,37 +6,32 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
 
-local cloneref = (cloneref or clonereference or function(instance) return instance end)
-
 -- ============================================================================
--- WINDUI LOADER (FIXED)
+-- FIX WINDUI LOADER (Gunakan metode ini agar tidak Nil)
 -- ============================================================================
-local WindUI
-local success_ui, result = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+local WindUI = nil
+local status, err = pcall(function()
+    local raw = game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua")
+    WindUI = loadstring(raw)()
 end)
 
-if success_ui and result then
-    WindUI = result
-else
-    warn("Gagal memuat UI: " .. tostring(result))
-    return
+if not WindUI then
+    warn("WindUI Gagal Dimuat. Error: " .. tostring(err))
+    -- Alternatif loader jika HttpGet gagal
+    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 end
--- ============================================================================
--- GLOBAL CONFIG & ANTI-AFK
--- ============================================================================
-local ScriptName = "DapzXAtomicScript"
-local OldGui = game.CoreGui:FindFirstChild(ScriptName)
-if OldGui then OldGui:Destroy() end
 
+-- ============================================================================
+-- GLOBAL CONFIG
+-- ============================================================================
 _G.FarmingActive = false
-_G.ScriptRunning = true
-_G.CatchDelay = 1.5 -- Waktu tarikan minigame (Bisa diatur di UI)
+_G.CatchDelay = 1.5 
 _G.AutoSellActive = false
 _G.AutoSellDelay = 1
 _G.AntiAFK = true
+_G.ScriptRunning = true
 
--- Anti-AFK Logic
+-- Anti-AFK
 LocalPlayer.Idled:Connect(function()
     if _G.AntiAFK then
         VirtualUser:CaptureController()
@@ -53,7 +47,7 @@ local Islands = {
 }
 
 -- ============================================================================
--- UTILITY FUNCTIONS
+-- UTILITY
 -- ============================================================================
 local function GetFishData(tool)
     if not tool or not tool:IsA("Tool") then return nil end
@@ -77,17 +71,11 @@ local function SellAllBatch()
     if #fishBatch > 0 then pcall(function() sellEvent:FireServer("SellAllBatch", fishBatch) end) end
 end
 
-local function getEquippedRod()
-    local char = LocalPlayer.Character
-    local tool = char and char:FindFirstChildWhichIsA("Tool")
-    return tool and tool.Name or nil
-end
-
 -- ============================================================================
--- WINDOW CREATION
+-- CREATE WINDOW (Line 84 Fix)
 -- ============================================================================
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v3.2 Bypass",
+    Title = "DapzX Atomic | v3.3",
     Author = "by DapzX",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
@@ -105,30 +93,20 @@ FishSection:Toggle({
     Callback = function(v) _G.FarmingActive = v end
 })
 
--- SLIDER BARU UNTUK MENGATUR KECEPATAN TARIKAN
 FishSection:Slider({
     Title = "Catch Delay (Detik)",
-    Desc = "Atur waktu tarikan. Makin kecil makin cepat, tapi makin rawan ke-detect.",
+    Desc = "Kecepatan tarik. (Safe: 1.0 - 1.5s)",
     Step = 0.1,
-    Value = {Min = 0.0, Max = 4.0, Default = 1.5},
+    Value = {Min = 0.1, Max = 5.0, Default = 1.5},
     Callback = function(v) _G.CatchDelay = v end
 })
 
 -- TAB: SHOP
 local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:bag-check-bold" })
-local ShopSection = ShopTab:Section({ Title = "Auto Sell Settings" })
-
-ShopSection:Toggle({
+ShopTab:Section({ Title = "Auto Sell" }):Toggle({
     Title = "Enable Auto Sell",
     Value = false,
     Callback = function(v) _G.AutoSellActive = v end
-})
-
-ShopSection:Slider({
-    Title = "Interval Jual (Menit)",
-    Step = 0.5,
-    Value = {Min = 0.5, Max = 10, Default = 1},
-    Callback = function(v) _G.AutoSellDelay = v end
 })
 
 -- TAB: TELEPORT
@@ -145,67 +123,42 @@ TeleportTab:Section({ Title = "Locations" }):Dropdown({
     end
 })
 
--- TAB: MISC
-local MiscTab = Window:Tab({ Title = "Misc", Icon = "solar:settings-bold" })
-MiscTab:Section({ Title = "Security" }):Toggle({
-    Title = "Anti-AFK",
-    Value = true,
-    Callback = function(v) _G.AntiAFK = v end
-})
-
 -- ============================================================================
--- CORE LOOPS
+-- CORE LOOP (BYPASS SYSTEM)
 -- ============================================================================
-
--- AUTO SELL LOOP
-local lastSell = tick()
-task.spawn(function()
-    while _G.ScriptRunning do
-        task.wait(2)
-        if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
-            SellAllBatch()
-            lastSell = tick()
-        end
-    end
-end)
-
--- ADJUSTABLE AUTO FARM LOOP
 local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 15)
+
 task.spawn(function()
     while _G.ScriptRunning do
-        -- Jeda random antar lemparan agar terlihat seperti manusia (0.2 - 0.5 detik)
-        task.wait(0.2 + (math.random(1, 3) / 10))
-
+        task.wait(0.3 + (math.random(1, 3)/10))
         if _G.FarmingActive and FishingSystem then
             pcall(function()
                 local char = LocalPlayer.Character
                 local root = char and char:FindFirstChild("HumanoidRootPart")
-                local rodName = getEquippedRod()
+                local tool = char and char:FindFirstChildWhichIsA("Tool")
                 
-                if root and rodName then
+                if root and tool then
+                    local rodName = tool.Name
                     local castPos = root.Position + (root.CFrame.LookVector * 15)
                     
-                    -- 1. Lempar Kail (Power di-random sedikit)
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 95 + math.random(1, 5))
+                    -- 1. Cast
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 98)
+                    task.wait(1.2)
                     
-                    -- 2. Tunggu ikan gigit (Realistis: 1 detik)
-                    task.wait(1.0 + (math.random(1, 2) / 10))
-                    
-                    -- 3. Precalc Fish (Server nentuin ikan apa)
+                    -- 2. Precalc
                     FishingSystem.PrecalcFish:InvokeServer()
                     
-                    -- 4. PENTING: Kirim sinyal UI Minigame agar server tidak curiga
+                    -- 3. Minigame Start Signal (PENTING BIAR GAK KICK)
                     FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
                     
-                    -- 5. CATCH DELAY ADJUSTABLE (Sesuai Slider + Sedikit Randomizer Anti-Cheat)
-                    local safeDelay = _G.CatchDelay + (math.random(1, 3) / 10)
-                    task.wait(safeDelay)
+                    -- 4. Dynamic Delay (Sesuai Slider)
+                    task.wait(_G.CatchDelay)
                     
-                    -- 6. Tarik Ikan
+                    -- 5. Give Fish
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
                     
-                    -- 7. Cleanup
-                    task.wait(0.3)
+                    -- 6. Cleanup
+                    task.wait(0.2)
                     FishingSystem.CleanupCast:FireServer()
                 end
             end)
@@ -213,4 +166,16 @@ task.spawn(function()
     end
 end)
 
-WindUI:Notify({ Title = "Atomic v3.2", Content = "Adjustable Catch Ready! Stay Safe.", Duration = 4 })
+-- AUTO SELL LOOP
+local lastSell = tick()
+task.spawn(function()
+    while _G.ScriptRunning do
+        task.wait(5)
+        if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
+            SellAllBatch()
+            lastSell = tick()
+        end
+    end
+end)
+
+WindUI:Notify({ Title = "DapzX Atomic", Content = "Script Loaded! Catch Delay Ready.", Duration = 4 })
