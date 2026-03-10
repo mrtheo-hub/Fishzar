@@ -1,264 +1,614 @@
---[[
-    FISHZAR BRUTAL EDITION v3.1 - FIXED (No Freeze)
-    "5 IKAN 1 TARIKAN" MODE - OPTIMIZED
-
-    Changelog:
-    - Fixed: Infinite loop freeze dengan proper yielding
-    - Added: Batch processing (fire multiple tapi tetep yield tiap batch)
-    - Optimized: Gunakan Heartbeat untuk consistent speed tanpa lag
-]]
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
--- ================================================================
--- CONFIG (TETEP SADIS TAPI STABIL)
--- ================================================================
-_G.BrutalMode = false
-_G.CastDelay = 0.1        -- 100ms (cepet tapi gak freeze)
-_G.ReelSpamCount = 5      -- Fire reel 5x per batch
-_G.CatchMultiFire = 3     -- Fire catch 3x per batch
-_G.BatchInterval = 0.05   -- 50ms antar batch (penting!)
+local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
--- Stats
-local Stats = {
-    FishCaught = 0,
-    StartTime = 0,
-    IsRunning = false,
-    CurrentConnection = nil
-}
+-- ============================================================================
+-- WINDUI LOADER (dari GitHub resmi)
+-- ============================================================================
+local WindUI
 
--- ================================================================
--- FIND REMOTES
--- ================================================================
-local Remotes = {
-    Cast = nil,
-    Reel = nil,
-    Catch = nil,
-    Sell = nil
-}
-
--- Scan ReplicatedStorage
-for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-    if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-        local name = v.Name:lower()
-        if name:find("cast") or name:find("throw") then
-            Remotes.Cast = v
-        elseif name:find("reel") or name:find("pull") then
-            Remotes.Reel = v
-        elseif name:find("catch") or name:find("bite") or name:find("hook") then
-            Remotes.Catch = v
-        elseif name:find("sell") then
-            Remotes.Sell = v
-        end
-    end
-end
-
-print("Remotes found:")
-for k, v in pairs(Remotes) do
-    print("  " .. k .. ":", v and v.Name or "NOT FOUND")
-end
-
--- ================================================================
--- BRUTAL FISHING (FIXED - NO FREEZE)
--- ================================================================
-local function DoBrutalFishing()
-    if not _G.BrutalMode then return end
-
-    -- 1. CAST (fire sekali tapi pasti)
-    if Remotes.Cast then
-        Remotes.Cast:FireServer()
-        task.wait(_G.CastDelay) -- Tunggu animasi cast selesai
-    end
-
-    -- 2. INSTANT REEL SPAM (batch processing dengan yield)
-    if Remotes.Reel then
-        for i = 1, _G.ReelSpamCount do
-            if not _G.BrutalMode then break end
-            Remotes.Reel:FireServer(true) -- true = perfect
-            task.wait(0.01) -- 10ms antar fire (penting!)
-        end
-    end
-
-    -- 3. MULTI-CATCH (fire beberapa kali untuk exploit)
-    if Remotes.Catch then
-        for i = 1, _G.CatchMultiFire do
-            if not _G.BrutalMode then break end
-            Remotes.Catch:FireServer()
-            -- Tidak perlu wait di sini karena mau instant
-        end
-    end
-
-    -- 4. UPDATE STATS
-    Stats.FishCaught = Stats.FishCaught + math.random(2, 5)
-end
-
--- ================================================================
--- MAIN LOOP (MENGGUNAKAN HEARTBEAT - ANTI FREEZE)
--- ================================================================
-local function StartBrutal()
-    if Stats.IsRunning then return end
-    Stats.IsRunning = true
-    Stats.StartTime = tick()
-
-    print("🔥 BRUTAL MODE STARTED 🔥")
-    print("Interval:", _G.BatchInterval, "seconds")
-    print("Est. speed:", math.floor(60/_G.BatchInterval * 2), "fish/min")
-
-    -- GUNAKAN HEARTBEAT: jalan tiap frame, gak freeze
-    Stats.CurrentConnection = RunService.Heartbeat:Connect(function()
-        if not _G.BrutalMode then
-            Stats.IsRunning = false
-            if Stats.CurrentConnection then
-                Stats.CurrentConnection:Disconnect()
-                Stats.CurrentConnection = nil
-            end
-            return
-        end
-
-        -- Jalankan fishing cycle
-        DoBrutalFishing()
-
-        -- YIELD PENTING: kasih jeda antar cycle
-        task.wait(_G.BatchInterval)
+do
+    local ok, result = pcall(function()
+        return require("./src/Init")
     end)
-end
 
-local function StopBrutal()
-    _G.BrutalMode = false
-    Stats.IsRunning = false
-    if Stats.CurrentConnection then
-        Stats.CurrentConnection:Disconnect()
-        Stats.CurrentConnection = nil
-    end
-    print("⏹ STOPPED")
-end
-
--- ================================================================
--- GUI
--- ================================================================
-local function CreateGUI()
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "BRUTAL_FISH_V3"
-    gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 220, 0, 150)
-    frame.Position = UDim2.new(0, 10, 0.5, -75)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-
-    -- Title
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-    title.Text = "🔥 BRUTAL FISHZAR v3.1"
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 14
-    title.Parent = frame
-
-    Instance.new("UICorner").Parent = title
-
-    -- Stats
-    local statsLabel = Instance.new("TextLabel")
-    statsLabel.Size = UDim2.new(1, -10, 0, 50)
-    statsLabel.Position = UDim2.new(0, 5, 0, 35)
-    statsLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    statsLabel.Text = "Fish: 0\n0 fish/min"
-    statsLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-    statsLabel.Font = Enum.Font.Gotham
-    statsLabel.TextSize = 12
-    statsLabel.Parent = frame
-
-    Instance.new("UICorner").Parent = statsLabel
-
-    -- Toggle Button
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
-    toggleBtn.Position = UDim2.new(0.05, 0, 0, 95)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    toggleBtn.Text = "▶ START BRUTAL"
-    toggleBtn.TextColor3 = Color3.new(1, 1, 1)
-    toggleBtn.Font = Enum.Font.GothamBold
-    toggleBtn.TextSize = 14
-    toggleBtn.Parent = frame
-
-    Instance.new("UICorner").Parent = toggleBtn
-
-    -- Logic
-    toggleBtn.MouseButton1Click:Connect(function()
-        if Stats.IsRunning then
-            StopBrutal()
-            toggleBtn.Text = "▶ START BRUTAL"
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    if ok then
+        WindUI = result
+    else
+        if cloneref(game:GetService("RunService")):IsStudio() then
+            WindUI = require(cloneref(ReplicatedStorage:WaitForChild("WindUI"):WaitForChild("Init")))
         else
-            _G.BrutalMode = true
-            toggleBtn.Text = "⏹ STOP"
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-            StartBrutal()
+            WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
         end
-    end)
-
-    -- Update stats
-    task.spawn(function()
-        while gui.Parent do
-            task.wait(1)
-            local elapsed = tick() - Stats.StartTime
-            local rate = elapsed > 0 and math.floor(Stats.FishCaught / (elapsed / 60)) or 0
-            statsLabel.Text = string.format("Fish: %d\n%d fish/min", Stats.FishCaught, rate)
-        end
-    end)
-
-    -- Drag
-    local dragging = false
-    local dragInput, dragStart, startPos
-
-    title.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-        end
-    end)
-
-    title.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    title.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
+    end
 end
 
--- ================================================================
--- INIT
--- ================================================================
-CreateGUI()
+-- ============================================================================
+-- GLOBAL CONFIG & DATA
+-- ============================================================================
+local ScriptName = "DapzXAtomicScript"
+local OldGui = game.CoreGui:FindFirstChild(ScriptName)
+if OldGui then OldGui:Destroy() end
 
--- Anti-AFK
-local VirtualUser = game:GetService("VirtualUser")
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
+_G.FarmingActive = false
+_G.ScriptRunning = true
+_G.MinigameDelay = 3.0
+_G.AutoSellActive = false
+_G.AutoSellDelay = 1
+
+local Islands = {
+    ["Pulau Nelayan"] = Vector3.new(-34.59, 14.43, 256.65),
+    ["Pulau Aquarist"] = Vector3.new(-2032.36, 12.97, -833.78),
+    ["Pulau Criystializ"] = Vector3.new(203.47, 13.09, -2614.84),
+    ["Megalodon Zone"] = Vector3.new(3125.59, 9.58, -1713.42)
+}
+
+-- ============================================================================
+-- UTILITY FUNCTIONS
+-- ============================================================================
+local function GetFishData(tool)
+    if not tool or not tool:IsA("Tool") then return nil end
+
+    local fId = tool:GetAttribute("fishId") or tool:GetAttribute("FishId") or tool:GetAttribute("ID")
+    local w = tool:GetAttribute("weight") or tool:GetAttribute("Weight")
+    local r = tool:GetAttribute("rarity") or tool:GetAttribute("Rarity")
+
+    if not fId then fId = (tool:FindFirstChild("fishId") and tool.fishId.Value) or (tool:FindFirstChild("FishId") and tool.FishId.Value) end
+    if not w then w = (tool:FindFirstChild("weight") and tool.weight.Value) or (tool:FindFirstChild("Weight") and tool.Weight.Value) end
+    if not r then r = (tool:FindFirstChild("rarity") and tool.rarity.Value) or (tool:FindFirstChild("Rarity") and tool.Rarity.Value) end
+
+    local dataFolder = tool:FindFirstChild("Data") or tool:FindFirstChild("Values") or tool:FindFirstChild("Stats") or tool:FindFirstChild("stats")
+    if dataFolder then
+        if not fId then fId = dataFolder:GetAttribute("fishId") or (dataFolder:FindFirstChild("fishId") and dataFolder.fishId.Value) end
+        if not w then w = dataFolder:GetAttribute("weight") or (dataFolder:FindFirstChild("weight") and dataFolder.weight.Value) end
+        if not r then r = dataFolder:GetAttribute("rarity") or (dataFolder:FindFirstChild("rarity") and dataFolder.rarity.Value) end
+    end
+
+    if fId and w and r then
+        return {
+            ["weight"] = tonumber(w),
+            ["rarity"] = tostring(r),
+            ["fishId"] = tostring(fId)
+        }
+    end
+    return nil
+end
+
+local function SellAllBatch()
+    local fishBatch = {}
+    local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
+    if not sellEvent then return end
+
+    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+        local data = GetFishData(item)
+        if data then table.insert(fishBatch, data) end
+    end
+
+    if LocalPlayer.Character then
+        for _, item in pairs(LocalPlayer.Character:GetChildren()) do
+            local data = GetFishData(item)
+            if data then table.insert(fishBatch, data) end
+        end
+    end
+
+    if #fishBatch > 0 then
+        sellEvent:FireServer("SellAllBatch", fishBatch)
+    end
+end
+
+local function SellSingle()
+    local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
+    if not sellEvent then return end
+
+    if LocalPlayer.Character then
+        local equippedItem = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+        if equippedItem then
+            local data = GetFishData(equippedItem)
+            if data then
+                sellEvent:FireServer("SellSingle", data)
+            end
+        end
+    end
+end
+
+local function getRodTip(character)
+    local activeSkin = character:FindFirstChild("ActiveSkinModel")
+    if activeSkin then return activeSkin:FindFirstChild("Tip") or activeSkin:FindFirstChild("Part") or activeSkin:FindFirstChild("Handle") end
+    local rod = character:FindFirstChildWhichIsA("Tool")
+    if rod then return rod:FindFirstChild("Part") or rod:FindFirstChild("Handle") end
+    return nil
+end
+
+local function createRealVisual(tipPart, castPos, rodName)
+    if not tipPart or not CastingModule then return nil end
+    local realHook = nil
+    pcall(function()
+        realHook = CastingModule:CreateHook(castPos, rodName)
+        if realHook then
+            realHook.Name = "AutoFarmHook"
+            realHook.Anchored = true
+            local att0 = tipPart:FindFirstChild("BeamAttachment") or Instance.new("Attachment", tipPart)
+            att0.Name = "BeamAttachment"
+            local att1 = realHook:FindFirstChild("BeamAttachment") or Instance.new("Attachment", realHook)
+            att1.Name = "BeamAttachment"
+            CastingModule:CreateBeam(realHook, att0, att1, rodName)
+        end
+    end)
+    return realHook
+end
+
+local function getEquippedRod()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local tool = char:FindFirstChildWhichIsA("Tool")
+    if tool then return tool.Name end
+    return nil
+end
+
+-- ============================================================================
+-- WINDUI WINDOW CREATION
+-- ============================================================================
+local Window = WindUI:CreateWindow({
+    Title = "DapzX Atomic | Fishzar",
+    Author = "by daffaalfiefebryantijani-droid",
+    Folder = "dapzxatomic",
+    Icon = "solar:atom-bold",
+    NewElements = true,
+    HideSearchBar = false,
+    Size = UDim2.fromOffset(580, 460),
+    
+    OpenButton = {
+        Title = "Open DapzX Atomic",
+        CornerRadius = UDim.new(1, 0),
+        StrokeThickness = 3,
+        Enabled = true,
+        Draggable = true,
+        OnlyMobile = false,
+        Scale = 0.5,
+        Color = ColorSequence.new(
+            Color3.fromHex("#FF006E"),
+            Color3.fromHex("#FB5607")
+        )
+    },
+    
+    Topbar = {
+        Height = 44,
+        ButtonsType = "Mac",
+    },
+})
+
+Window:SetUIScale(1.0)
+
+-- ============================================================================
+-- VERSION TAG
+-- ============================================================================
+Window:Tag({
+    Title = "v2.0 | DapzX Atomic",
+    Icon = "solar:bolt-bold",
+    Color = Color3.fromHex("#FF006E"),
+    Border = true,
+})
+
+-- ============================================================================
+-- TAB: INFO
+-- ============================================================================
+local InfoTab = Window:Tab({
+    Title = "Info",
+    Desc = "Informasi Script",
+    Icon = "solar:info-square-bold",
+    IconColor = Color3.fromHex("#FF006E"),
+    IconShape = "Square",
+    Border = true,
+})
+
+local InfoSection = InfoTab:Section({
+    Title = "Tentang DapzX Atomic",
+})
+
+InfoSection:Image({
+    Image = "rbxassetid://81111630423385",
+    AspectRatio = "16:9",
+    Radius = 9,
+})
+
+InfoTab:Space({ Columns = 2 })
+
+InfoSection:Section({
+    Title = "⚡ Selamat Datang!",
+    TextSize = 20,
+    FontWeight = Enum.FontWeight.SemiBold,
+})
+
+InfoTab:Space()
+
+InfoSection:Section({
+    Title = "Selamat datang di DapzX Atomic Fishzar!\n\nUpdate Terbaru v2.0:\n• Rebranding ke DapzX Atomic\n• UI WindUI Modern & Responsive\n• Optimasi performa script\n• Fitur Auto Sell & Shop lengkap\n• Teleport system yang lebih stabil\n\nEnjoy the script!",
+    TextSize = 14,
+    TextTransparency = 0.3,
+    FontWeight = Enum.FontWeight.Medium,
+})
+
+InfoTab:Space({ Columns = 2 })
+
+InfoSection:Section({
+    Title = "⚠️ Catatan Penting",
+    TextSize = 14,
+    FontWeight = Enum.FontWeight.SemiBold,
+})
+
+InfoTab:Space()
+
+InfoSection:Section({
+    Title = "• Gunakan fitur Auto Farm maksimal delay 2 detik untuk keamanan\n• Teleport dengan bijak untuk menghindari deteksi sistem\n• Pastikan inventory cukup sebelum memulai farming\n• Selalu update script ke versi terbaru\n• Report bug di Discord server resmi kami",
+    TextSize = 12,
+    TextTransparency = 0.35,
+    FontWeight = Enum.FontWeight.Regular,
+})
+
+-- ============================================================================
+-- TAB: FISHING
+-- ============================================================================
+local FishingTab = Window:Tab({
+    Title = "Fishing",
+    Desc = "Auto Farming Settings",
+    Icon = "solar:cursor-square-bold",
+    IconColor = Color3.fromHex("#00B4D8"),
+    IconShape = "Square",
+    Border = true,
+})
+
+local FishingSection = FishingTab:Section({
+    Title = "Auto Fishing Controls",
+})
+
+FishingSection:Toggle({
+    Title = "Auto Farm",
+    Desc = "Otomatis menjalankan fishing loop",
+    Value = false,
+    Callback = function(state)
+        _G.FarmingActive = state
+        if state then
+            WindUI:Notify({
+                Title = "Auto Farm",
+                Content = "Auto farm telah diaktifkan!",
+                Icon = "solar:play-bold",
+                Duration = 2,
+            })
+        else
+            WindUI:Notify({
+                Title = "Auto Farm",
+                Content = "Auto farm telah dinonaktifkan!",
+                Icon = "solar:stop-bold",
+                Duration = 2,
+            })
+        end
+    end
+})
+
+FishingTab:Space({ Columns = 1 })
+
+FishingSection:Slider({
+    Title = "Farming Delay (Detik)",
+    Desc = "Delay antara cast dan pull (default: 3s)",
+    Step = 0.5,
+    Value = {
+        Min = 0.5,
+        Max = 5,
+        Default = 3,
+    },
+    Callback = function(value)
+        _G.MinigameDelay = value
+    end
+})
+
+FishingTab:Space({ Columns = 1 })
+
+FishingSection:Button({
+    Title = "Hapus Kail Nyangkut",
+    Desc = "Bersihkan hook yang stuck/nyangkut",
+    Color = Color3.fromHex("#FF006E"),
+    Justify = "Center",
+    Icon = "solar:trash-bin-bold",
+    Callback = function()
+        for _, v in pairs(workspace:GetChildren()) do
+            if v.Name == "AutoFarmHook" then 
+                v:Destroy() 
+            end
+        end
+        WindUI:Notify({
+            Title = "Hook Cleared ✓",
+            Content = "Kail yang nyangkut telah dihapus!",
+            Icon = "solar:trash-bin-bold",
+            Duration = 3,
+        })
+    end
+})
+
+-- ============================================================================
+-- TAB: SHOP (Selling)
+-- ============================================================================
+local ShopTab = Window:Tab({
+    Title = "Shop",
+    Desc = "Selling & Auto Sell Settings",
+    Icon = "solar:bag-check-bold",
+    IconColor = Color3.fromHex("#06FFA5"),
+    IconShape = "Square",
+    Border = true,
+})
+
+local ManualSellSection = ShopTab:Section({
+    Title = "Manual Selling",
+})
+
+ManualSellSection:Button({
+    Title = "Jual Semua Ikan",
+    Desc = "Menjual seluruh ikan di inventory",
+    Color = Color3.fromHex("#06FFA5"),
+    Justify = "Center",
+    Icon = "solar:check-circle-bold",
+    Callback = function()
+        SellAllBatch()
+        WindUI:Notify({
+            Title = "Selling ✓",
+            Content = "Semua ikan berhasil dijual!",
+            Icon = "solar:bag-check-bold",
+            Duration = 2,
+        })
+    end
+})
+
+ShopTab:Space({ Columns = 1 })
+
+ManualSellSection:Button({
+    Title = "Jual Ikan Di Tangan",
+    Desc = "Menjual ikan yang sedang dipegang",
+    Color = Color3.fromHex("#00B4D8"),
+    Justify = "Center",
+    Icon = "solar:hand-up-bold",
+    Callback = function()
+        SellSingle()
+        WindUI:Notify({
+            Title = "Selling ✓",
+            Content = "Ikan di tangan berhasil dijual!",
+            Icon = "solar:bag-check-bold",
+            Duration = 2,
+        })
+    end
+})
+
+ShopTab:Space({ Columns = 2 })
+
+local AutoSellSection = ShopTab:Section({
+    Title = "Auto Selling (Advanced)",
+})
+
+AutoSellSection:Toggle({
+    Title = "Enable Auto Sell",
+    Desc = "Otomatis menjual ikan setiap interval",
+    Value = false,
+    Callback = function(state)
+        _G.AutoSellActive = state
+        if state then
+            WindUI:Notify({
+                Title = "Auto Sell",
+                Content = "Auto sell telah diaktifkan!",
+                Icon = "solar:play-bold",
+                Duration = 2,
+            })
+        else
+            WindUI:Notify({
+                Title = "Auto Sell",
+                Content = "Auto sell telah dinonaktifkan!",
+                Icon = "solar:stop-bold",
+                Duration = 2,
+            })
+        end
+    end
+})
+
+ShopTab:Space({ Columns = 1 })
+
+AutoSellSection:Slider({
+    Title = "Delay Penjualan (Menit)",
+    Desc = "Interval waktu auto sell",
+    Step = 0.5,
+    Value = {
+        Min = 0.5,
+        Max = 10,
+        Default = 1,
+    },
+    Callback = function(value)
+        _G.AutoSellDelay = value
+    end
+})
+
+-- ============================================================================
+-- TAB: TELEPORT
+-- ============================================================================
+local TeleportTab = Window:Tab({
+    Title = "Teleport",
+    Desc = "Teleport to Players or Islands",
+    Icon = "solar:map-point-wave-bold",
+    IconColor = Color3.fromHex("#FFB703"),
+    IconShape = "Square",
+    Border = true,
+})
+
+local TeleportSection = TeleportTab:Section({
+    Title = "Teleportation System",
+})
+
+-- Get Players List
+local function GetPlayersList()
+    local playersList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playersList, {
+                Title = player.Name,
+                Icon = "solar:user-bold",
+            })
+        end
+    end
+    return playersList
+end
+
+-- Get Islands List
+local function GetIslandsList()
+    local islandsList = {}
+    for name, _ in pairs(Islands) do
+        table.insert(islandsList, {
+            Title = name,
+            Icon = "solar:map-bold",
+        })
+    end
+    return islandsList
+end
+
+TeleportSection:Dropdown({
+    Title = "Teleport ke Player",
+    Desc = "Pilih player untuk diteleport",
+    Values = GetPlayersList(),
+    Callback = function(option)
+        local targetPlayer = Players:FindFirstChild(option.Title)
+        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local targetPos = targetPlayer.Character.HumanoidRootPart.Position
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+                WindUI:Notify({
+                    Title = "Teleported ✓",
+                    Content = "Teleported ke " .. option.Title .. "!",
+                    Icon = "solar:map-point-wave-bold",
+                    Duration = 2,
+                })
+            end
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "Player tidak ditemukan atau tidak ada character!",
+                Icon = "solar:danger-bold",
+                Duration = 3,
+            })
+        end
+    end
+})
+
+TeleportTab:Space({ Columns = 1 })
+
+TeleportSection:Dropdown({
+    Title = "Teleport ke Pulau",
+    Desc = "Pilih pulau untuk diteleport",
+    Values = GetIslandsList(),
+    Callback = function(option)
+        local targetPos = Islands[option.Title]
+        if targetPos then
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+                WindUI:Notify({
+                    Title = "Teleported ✓",
+                    Content = "Teleported ke " .. option.Title .. "!",
+                    Icon = "solar:map-point-wave-bold",
+                    Duration = 2,
+                })
+            end
+        else
+            WindUI:Notify({
+                Title = "Error",
+                Content = "Pulau tidak ditemukan!",
+                Icon = "solar:danger-bold",
+                Duration = 3,
+            })
+        end
+    end
+})
+
+-- ============================================================================
+-- AUTO SELL LOOP
+-- ============================================================================
+local autoSellTimer = 0
+task.spawn(function()
+    while _G.ScriptRunning do
+        task.wait(1)
+        if _G.AutoSellActive then
+            autoSellTimer = autoSellTimer + 1
+            if autoSellTimer >= (tonumber(_G.AutoSellDelay) or 1) * 60 then
+                pcall(function() SellAllBatch() end)
+                autoSellTimer = 0
+            end
+        else
+            autoSellTimer = 0
+        end
+    end
 end)
 
-print("✅ BRUTAL FISHZAR v3.1 (FIXED) Loaded!")
-print("Speed: SUPER FAST (tapi gak freeze)")
-print("Batch interval:", _G.BatchInterval, "s")
+-- ============================================================================
+-- AUTO FARMING LOOP
+-- ============================================================================
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
+local FishingModules = FishingSystem and FishingSystem:WaitForChild("FishingModules", 10)
 
+local AnimController, CastingModule
+if FishingModules then
+    pcall(function() AnimController = require(FishingModules:WaitForChild("AnimationController")) end)
+    pcall(function() CastingModule = require(FishingModules:WaitForChild("CastingSystem")) end)
+end
 
-==================================================
-Script length: 8385 characters
+task.spawn(function()
+    while _G.ScriptRunning do
+        task.wait(0.2)
+        if _G.FarmingActive and FishingSystem then
+            pcall(function()
+                local character = LocalPlayer.Character
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                local actualRod = getEquippedRod()
+
+                if character and rootPart and actualRod then
+                    local castPos = rootPart.Position + (rootPart.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
+                    local tipPart = getRodTip(character)
+
+                    if AnimController then pcall(function() AnimController:Play("PrepareCast", 0.1) end) end
+                    FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, actualRod, 99.5 + math.random())
+                    local activeVisualHook = createRealVisual(tipPart, castPos, actualRod)
+
+                    task.wait(1.5)
+                    FishingSystem.PrecalcFish:InvokeServer()
+                    task.wait(0.5)
+
+                    if AnimController then pcall(function() AnimController:Play("PullingAnimation", 0.1) end) end
+                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+
+                    task.wait(_G.MinigameDelay)
+                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    task.wait(0.3)
+
+                    FishingSystem.CleanupCast:FireServer()
+                    if activeVisualHook then activeVisualHook:Destroy() end
+                    if AnimController then pcall(function() AnimController:Play("EquippedAnimation", 0.3) end) end
+
+                    task.wait(1.2)
+                else
+                    task.wait(1)
+                end
+            end)
+        end
+    end
+end)
+
+-- ============================================================================
+-- CLEANUP & INITIALIZATION
+-- ============================================================================
+game:GetService("Players").LocalPlayer.Backpack.ChildAdded:Connect(function()
+    -- Event trigger saat ada item baru
+    if _G.ScriptRunning then
+        -- Update logic jika diperlukan
+    end
+end)
+
+print("✅ DapzX Atomic Script dengan WindUI berhasil dimuat!")
+print("⚡ Versi: v2.0 | Mode: Fishzar")
+print("🎣 Selamat menggunakan DapzX Atomic!")
