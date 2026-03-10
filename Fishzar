@@ -1,4 +1,4 @@
--- [[ DAPZX ATOMIC | FISHZAR V4.3.0 - PRIORITY REPAIR ]]
+-- [[ DAPZX ATOMIC | FISHZAR V4.5.0 - THE FINAL CURE ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -23,28 +23,33 @@ end
 CreateLoadingScreen()
 
 -- [[ 2. CONFIG ]]
-_G.Version = "v4.3.0"
+_G.Version = "v4.5.0"
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WebhookURL = ""
 _G.FilterRarity = {["Common"]=true,["Uncommon"]=true,["Rare"]=true,["Epic"]=true,["Legendary"]=true,["Secret"]=true}
 
--- [[ 3. WEBHOOK LOGIC (NEW BACKPACK WATCHER) ]]
+-- [[ 3. WEBHOOK LOGIC (SMART DETECTOR) ]]
 local function SendWebhook(item)
     if not _G.WebhookURL or _G.WebhookURL == "" then return end
-    local rarity = item:GetAttribute("rarity")
-    if not rarity or not _G.FilterRarity[rarity] then return end
+    
+    -- Ambil data dari Attribute ATAU Folder Stats
+    local rarity = item:GetAttribute("rarity") or (item:FindFirstChild("Stats") and item.Stats:FindFirstChild("Rarity") and item.Stats.Rarity.Value)
+    local weight = item:GetAttribute("weight") or (item:FindFirstChild("Stats") and item.Stats:FindFirstChild("Weight") and item.Stats.Weight.Value) or 0
+    local fishName = item:GetAttribute("fishId") or item.Name
+
+    if not rarity or not _G.FilterRarity[tostring(rarity)] then return end
     
     local payload = {
         ["embeds"] = {{
             ["title"] = "🎣 Ikan Tertangkap!",
             ["color"] = 3447003,
             ["fields"] = {
-                {["name"] = "Nama", ["value"] = tostring(item:GetAttribute("fishId") or item.Name), ["inline"] = true},
+                {["name"] = "Nama", ["value"] = tostring(fishName), ["inline"] = true},
                 {["name"] = "Rarity", ["value"] = tostring(rarity), ["inline"] = true},
-                {["name"] = "Berat", ["value"] = tostring(item:GetAttribute("weight") or 0) .. " kg", ["inline"] = true}
+                {["name"] = "Berat", ["value"] = tostring(weight) .. " kg", ["inline"] = true}
             },
-            ["footer"] = {["text"] = "DapzX Atomic System | " .. os.date("%X")}
+            ["footer"] = {["text"] = "DapzX Atomic | " .. os.date("%X")}
         }}
     }
     pcall(function()
@@ -57,13 +62,11 @@ local function SendWebhook(item)
     end)
 end
 
--- Deteksi Ikan Masuk Backpack (Manual/Auto)
+-- Watcher: Kirim webhook setiap ada item baru di Backpack
 LocalPlayer.Backpack.ChildAdded:Connect(function(child)
+    task.wait(1) -- Beri waktu game untuk inject data ke ikan
     if child:IsA("Tool") then
-        task.wait(0.5) -- Tunggu atribut ke-load
-        if child:GetAttribute("rarity") then
-            SendWebhook(child)
-        end
+        SendWebhook(child)
     end
 end)
 
@@ -75,7 +78,7 @@ Window:Tag({Title = "Exec: "..(identifyexecutor() or "Unknown"), Color = Color3.
 
 -- TABS
 local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
-FTab:Section({Title = "Smart Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
+FTab:Section({Title = "Bypass Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
 
 local STab = Window:Tab({Title = "Auto Sell", Icon = "solar:bag-bold"})
 STab:Section({Title = "Auto Sell"}):Toggle({Title = "Enable Auto Sell", Callback = function(s) _G.AutoSellActive = s end})
@@ -85,41 +88,55 @@ local Islands = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist
 for name, pos in pairs(Islands) do TTab:Section({Title = name}):Button({Title = "Teleport", Callback = function() LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end}) end
 
 local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-ITab:Section({Title = "Webhook URL"}):Input({Title = "Paste URL", Callback = function(v) 
+ITab:Section({Title = "Webhook"}):Input({Title = "URL", Callback = function(v) 
     _G.WebhookURL = v 
     local t = {["embeds"] = {{["title"] = "✅ Connected!", ["color"] = 65280}}}
     pcall(function() (http_request or request)({Url=v, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(t)}) end)
 end})
-
-local FSec = ITab:Section({Title = "Filter Rarity (Webhook)"})
+local FSec = ITab:Section({Title = "Filter Rarity"})
 for _, r in pairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}) do
     FSec:Toggle({Title = r, Value = true, Callback = function(s) _G.FilterRarity[r] = s end})
 end
 
--- [[ 5. AUTO FARM CORE (REMOTE + CLICK HYBRID) ]]
+-- [[ 5. AUTO FARM CORE (ANTI-BENGONG) ]]
 task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
     while true do
         task.wait(1)
         if _G.FarmingActive and LocalPlayer.Character then
+            -- Auto-Equip Rod
             local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            if not tool then
+                for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do
+                    if v:IsA("Tool") and (v.Name:lower():find("rod") or v:FindFirstChild("Handle")) then
+                        LocalPlayer.Character.Humanoid:EquipTool(v)
+                        task.wait(0.5)
+                        break
+                    end
+                end
+            end
+            
+            tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
             if tool then
-                -- Step 1: Lempar
                 local root = LocalPlayer.Character.HumanoidRootPart
-                local castPos = root.Position + (root.CFrame.LookVector * 15)
+                local castPos = root.Position + (root.CFrame.LookVector * 20)
+                
+                -- Simulate Click to Wake Up the game
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+                task.wait(0.1)
+                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+                
+                -- Remote Casting
                 FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 100)
                 
-                -- Step 2: Deteksi Ikan Makan (Bypass Bengong)
-                -- Kita tunggu signal dari game atau tarik paksa setelah delay
-                task.wait(3.5) 
+                task.wait(4) -- Waktu tunggu ikan makan
                 
-                -- Step 3: Tarik
+                -- Remote Pulling
                 FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
                 
-                -- Step 4: Cleanup & Reset
                 task.wait(1)
                 FishingSystem.CleanupCast:FireServer()
-                task.wait(2) -- Jeda aman
+                task.wait(2)
             end
         end
     end
@@ -135,7 +152,7 @@ task.spawn(function()
                 local sellRemote = fs:FindFirstChild("SellFish") or fs:FindFirstChild("SellAllBatch")
                 local items = {}
                 for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do
-                    if v:IsA("Tool") and v:GetAttribute("rarity") then table.insert(items, v) end
+                    if v:IsA("Tool") and (v:GetAttribute("rarity") or v:FindFirstChild("Stats")) then table.insert(items, v) end
                 end
                 if #items > 0 then sellRemote:FireServer("SellAllBatch", items) end
             end)
