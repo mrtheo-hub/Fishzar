@@ -1,115 +1,105 @@
--- [[ DAPZX ATOMIC | FISHZAR V7.0.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V8.0.0 - LOCKED ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
-local VirtualUser = game:GetService("VirtualUser")
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
+local FishingModules = FishingSystem:WaitForChild("FishingModules")
+local AnimController = require(FishingModules:WaitForChild("AnimationController"))
 
 _G.FarmingActive = false
-_G.AutoSellActive = false
-_G.WalkOnWater = false
-_G.AntiAFK = false
-_G.AntiDrown = false
-_G.AutoEquip = false
-_G.StreamerMode = false
-_G.AntiStaff = false
 _G.SettingsDelay = 3.0
-_G.FilterRarity = {["Common"]=true,["Uncommon"]=true,["Rare"]=true,["Epic"]=true,["Legendary"]=true,["Secret"]=true}
+_G.AutoEquip = false
+_G.AntiDrown = false
 
--- [[ 1. SECURITY & UTILITIES ]]
--- Anti-AFK
-LocalPlayer.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-
--- Anti-Staff
-Players.PlayerAdded:Connect(function(p) 
-    if _G.AntiStaff and (p:GetRankInGroup(game.CreatorId) > 0 or p.Name:lower():find("admin")) then LocalPlayer:Kick("Staff Detected!") end 
-end)
-
--- [[ 2. WEBHOOK & FISH MONITOR ]]
-local function SendWebhook(item)
-    if not _G.WebhookURL or _G.WebhookURL == "" then return end
-    local r = item:GetAttribute("rarity") or "Unknown"
-    if not _G.FilterRarity[tostring(r)] then return end
-    local p = {["embeds"]={{["title"]="🎣 Ikan!", ["fields"]={{["name"]="Nama",["value"]=item.Name}, {["name"]="Rarity",["value"]=tostring(r)}}}}}
-    pcall(function() (http_request or request)({Url=_G.WebhookURL, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(p)}) end)
-end
-
-LocalPlayer.Backpack.ChildAdded:Connect(function(i) if i:IsA("Tool") then task.wait(0.5); SendWebhook(i) end end)
-
--- [[ 3. UI GENERATION ]]
+-- [[ 1. TAB MAIN (COPYRIGHT) ]]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar V7", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
+local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar V8", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
 
--- TAB MAIN (COPYRIGHT)
 local MainTab = Window:Tab({Title = "Main", Icon = "solar:home-smile-bold"})
-MainTab:Section({Title = "DapzX Atomic System"})
-MainTab:Button({Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/getsades") end})
+MainTab:Section({Title = "DapzX Atomic System © 2026"})
+MainTab:Section({Title = "Creator: DapzX Team"})
+MainTab:Button({Title = "Copy Official Discord", Callback = function() setclipboard("https://discord.gg/getsades") end})
 
--- TAB PLAYER
+-- [[ 2. PLAYER TAB ]]
 local PlayerTab = Window:Tab({Title = "Player", Icon = "solar:user-bold"})
-PlayerTab:Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
-PlayerTab:Toggle({Title = "Anti AFK", Callback = function(s) _G.AntiAFK = s end})
-PlayerTab:Toggle({Title = "Anti Drown (Infinite Oxygen)", Callback = function(s) _G.AntiDrown = s end})
+PlayerTab:Toggle({Title = "Anti Drown", Callback = function(s) _G.AntiDrown = s end})
 PlayerTab:Toggle({Title = "Auto Equip Rod", Callback = function(s) _G.AutoEquip = s end})
 
--- TAB FISHING
+-- [[ 3. FISHING TAB (LOCKED METHOD) ]]
 local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
 FTab:Toggle({Title = "Auto Farm", Callback = function(s) _G.FarmingActive = s end})
-FTab:Input({Title = "Settings Delay", Placeholder = "3.0", Callback = function(v) _G.SettingsDelay = tonumber(v) or 3 end})
+FTab:Input({Title = "Settings Delay (Detik)", Placeholder = "3.0", Callback = function(v) _G.SettingsDelay = tonumber(v) or 3 end})
 
--- TAB TELEPORT
-local TTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
-local Islands = {["Nelayan"] = Vector3.new(-34, 14, 256), ["Aquarist"] = Vector3.new(-2032, 13, -833), ["Crystaliz"] = Vector3.new(203, 13, -2614), ["Megalodon"] = Vector3.new(3125, 9, -1713)}
-for n, p in pairs(Islands) do TTab:Button({Title = n, Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(p) end end}) end
-
--- TAB UTILITIES
+-- [[ 4. UTILITIES (FIXED) ]]
 local UTab = Window:Tab({Title = "Utilities", Icon = "solar:shield-keyhole-bold"})
-UTab:Toggle({Title = "Streamer Mode", Callback = function(s) _G.StreamerMode = s end})
-UTab:Toggle({Title = "Anti Staff", Callback = function(s) _G.AntiStaff = s end})
-local PingLabel = UTab:Section({Title = "Ping: ..."})
-local FPSLabel = UTab:Section({Title = "FPS: ..."})
+local PingStat = UTab:Section({Title = "Ping: Loading..."})
+local FPSStat = UTab:Section({Title = "FPS: Loading..."})
 
--- TAB PERFORMANCE
+-- [[ 5. PERFORMANCE ]]
 local PTab = Window:Tab({Title = "Performance", Icon = "solar:bolt-bold"})
-PTab:Button({Title = "FPS Booster", Callback = function() for _,v in pairs(workspace:GetDescendants()) do if v:IsA("Decal") then v:Destroy() end end end})
+PTab:Button({Title = "FPS Booster (Delete Decals)", Callback = function()
+    for _,v in pairs(workspace:GetDescendants()) do if v:IsA("Decal") then v:Destroy() end end
+end})
 
--- [[ 4. LOOPS (STABLE) ]]
--- Stats Loop
+-- [[ LOOPS (STRICT) ]]
+-- Stats Loop (Safe)
 task.spawn(function()
     while task.wait(1) do
-        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
-        local fps = math.floor(workspace:GetRealTimePhysicsFPS())
-        PingLabel:SetTitle("Ping: " .. ping)
-        FPSLabel:SetTitle("FPS: " .. fps)
+        local stats = game:GetService("Stats")
+        PingStat:SetTitle("Ping: " .. math.floor(stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms")
+        FPSStat:SetTitle("FPS: " .. math.floor(workspace:GetRealTimePhysicsFPS()))
     end
 end)
 
--- Walk on Water (Fixed)
-RunService.RenderStepped:Connect(function()
-    if _G.WalkOnWater and LocalPlayer.Character then
-        local pos = LocalPlayer.Character.HumanoidRootPart.Position
-        if pos.Y < 5 then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, 5.5, pos.Z) end
-    end
-    if _G.AntiDrown and LocalPlayer.Character then
-        LocalPlayer.Character:FindFirstChild("Humanoid"):SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        LocalPlayer.Character:FindFirstChild("Humanoid").Oxygen = 100 
-    end
-    if _G.StreamerMode and LocalPlayer.Character then
-        local head = LocalPlayer.Character:FindFirstChild("Head")
-        if head and head:FindFirstChild("Nametag") then head.Nametag.Enabled = false end
-    end
-end)
-
--- Auto Equip (Fixed)
+-- Anti Drown (Safe: Lock Oxygen)
 task.spawn(function()
-    while task.wait(2) do
-        if _G.AutoEquip and LocalPlayer.Character then
-            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-            if not tool then
-                local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
-                if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
-            end
+    while task.wait(0.5) do
+        if _G.AntiDrown and LocalPlayer.Character then
+            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+            if hum then hum:SetStateEnabled(Enum.HumanoidStateType.Dead, true) end
+            -- Memaksa oksigen agar tidak habis
+            if LocalPlayer.Character:FindFirstChild("Oxygen") then LocalPlayer.Character.Oxygen.Value = 100 end
+        end
+    end
+end)
+
+-- Auto Equip (Safe)
+task.spawn(function()
+    while task.wait(1) do
+        if _G.AutoEquip and LocalPlayer.Character and not LocalPlayer.Character:FindFirstChildWhichIsA("Tool") then
+            local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+            if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
+        end
+    end
+end)
+
+-- FISHING LOOP (LOCKED METHOD - JANGAN DIUBAH)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if _G.FarmingActive and LocalPlayer.Character then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local root = char.HumanoidRootPart
+                local tool = char:FindFirstChildWhichIsA("Tool")
+                if tool then
+                    local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
+                    AnimController:Play("PrepareCast", 0.1)
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
+                    task.wait(1.5)
+                    FishingSystem.PrecalcFish:InvokeServer()
+                    task.wait(0.5)
+                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+                    task.wait(_G.SettingsDelay)
+                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    task.wait(0.3)
+                    FishingSystem.CleanupCast:FireServer()
+                    AnimController:Play("EquippedAnimation", 0.3)
+                    task.wait(1.5)
+                end
+            end)
         end
     end
 end)
