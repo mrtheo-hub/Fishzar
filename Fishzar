@@ -1,4 +1,4 @@
--- [[ DapzX Atomic - Version 7.0 (Brute Force Detection) ]] --
+-- [[ DapzX Atomic - Version 8.0 (FISHZAR ULTIMATE) ]] --
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -10,108 +10,106 @@ local LocalPlayer = Players.LocalPlayer
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v7.0 Brute",
+    Title = "DapzX Atomic | Fishzar v8",
     Author = "by DapzX",
-    Folder = "fishzar_atomic",
+    Folder = "fishzar_v8",
     Icon = "solar:fish-bold",
     Size = UDim2.fromOffset(580, 460),
     OpenButton = { Enabled = true, Draggable = true }
 })
 
 -- ============================================================================
--- CONFIG
+-- CONFIG & DETECTION
 -- ============================================================================
 _G.FarmingActive = false
-_G.CatchDelay = 1.0
+_G.CatchDelay = 1.2
+_G.AntiAFK = true
 
--- ============================================================================
--- THE SCANNER (Mencari Remote Tanpa Nama)
--- ============================================================================
-local function GetRemotes()
-    local folder = ReplicatedStorage:FindFirstChild("FishingSystem")
-    if not folder then return nil end
-    
-    local found = {}
-    for _, v in pairs(folder:GetChildren()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            local name = v.Name:lower()
-            if name:find("cast") or name:find("line") or name:find("throw") then
-                found.Cast = v
-            elseif name:find("give") or name:find("catch") or name:find("claim") or name:find("reward") then
-                found.Catch = v
-            elseif name:find("win") or name:find("finish") or name:find("result") or name:find("success") then
-                found.Win = v
-            end
-        end
+-- Detection Fishzar Pathway
+local FSystem = ReplicatedStorage:FindFirstChild("FishingSystem")
+local CastLine = FSystem and FSystem:FindFirstChild("CastLine")
+local FishGiver = FSystem and FSystem:FindFirstChild("FishGiver")
+local WinGame = FSystem and FSystem:FindFirstChild("WinMinigame")
+
+-- Anti-AFK
+game:GetService("Players").LocalPlayer.Idled:Connect(function()
+    if _G.AntiAFK then
+        game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
     end
-    return found
-end
+end)
 
 -- ============================================================================
 -- UI TABS
 -- ============================================================================
 local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Section({ Title = "Farming" }):Toggle({
+MainTab:Section({ Title = "Fishzar Farming" }):Toggle({
     Title = "Auto Farm",
     Value = false,
     Callback = function(v) _G.FarmingActive = v end
 })
 
-MainTab:Section({ Title = "Timing" }):Slider({
-    Title = "Catch Delay",
+MainTab:Section({ Title = "Settings" }):Slider({
+    Title = "Catch Delay (Detik)",
     Step = 0.1,
-    Value = {Min = 0.1, Max = 5.0, Default = 1.0},
+    Value = {Min = 0.5, Max = 5.0, Default = 1.2},
     Callback = function(v) _G.CatchDelay = v end
 })
 
 -- ============================================================================
--- CORE LOOP
+-- THE CORE LOOP
 -- ============================================================================
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if _G.FarmingActive then
-            local remotes = GetRemotes()
+        if _G.FarmingActive and FSystem then
             local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local rod = char and char:FindFirstChildWhichIsA("Tool") or LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+            local tool = char and char:FindFirstChildWhichIsA("Tool")
             
-            -- Auto Equip if in Backpack
-            if rod and rod.Parent == LocalPlayer.Backpack then
-                char.Humanoid:EquipTool(rod)
+            -- Auto Equip
+            if not tool then
+                local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+                if rod then char.Humanoid:EquipTool(rod) end
             end
 
-            if root and rod and remotes and remotes.Cast then
+            if char and char:FindFirstChild("HumanoidRootPart") then
                 pcall(function()
+                    local root = char.HumanoidRootPart
                     local castPos = root.Position + (root.CFrame.LookVector * 20)
                     
-                    -- Mencoba lempar dengan berbagai gaya argument (Fishzar Fix)
-                    remotes.Cast:FireServer(castPos, root.Position, rod.Name, 100)
-                    
-                    task.wait(1.5)
-                    
-                    -- Win Spoofing
-                    if remotes.Win then
-                        if remotes.Win:IsA("RemoteFunction") then
-                            remotes.Win:InvokeServer(true, 100)
-                        else
-                            remotes.Win:FireServer(true, 100)
-                        end
+                    -- 1. LEMPAR (Gunakan InvokeServer jika FireServer gagal)
+                    if CastLine:IsA("RemoteFunction") then
+                        CastLine:InvokeServer(castPos)
+                    else
+                        CastLine:FireServer(castPos)
                     end
                     
+                    -- 2. TUNGGU IKAN GIGIT (Wait for server bite)
+                    task.wait(1.5 + math.random(0.1, 0.5))
+                    
+                    -- 3. BYPASS MINIGAME
+                    if WinGame then
+                        WinGame:FireServer(true)
+                    end
+                    
+                    -- 4. JEDA INSTANT (Slider)
                     task.wait(_G.CatchDelay)
                     
-                    -- Catching
-                    if remotes.Catch then
-                        remotes.Catch:FireServer({["hookPosition"] = castPos})
-                        -- Cadangan jika format di atas salah:
-                        remotes.Catch:FireServer(true) 
+                    -- 5. CLAIM HADIAH
+                    if FishGiver:IsA("RemoteFunction") then
+                        FishGiver:InvokeServer()
+                    else
+                        FishGiver:FireServer()
                     end
+                    
+                    -- 6. RESET
+                    local stop = FSystem:FindFirstChild("StopFishing")
+                    if stop then stop:FireServer() end
                 end)
-                task.wait(0.5)
             end
         end
     end
 end)
 
-WindUI:Notify({ Title = "v7.0 Ready", Content = "Scanning Remotes...", Duration = 3 })
+WindUI:Notify({ Title = "Success", Content = "Fishzar v8.0 Loaded!", Duration = 3 })
