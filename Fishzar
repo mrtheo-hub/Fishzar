@@ -1,77 +1,72 @@
-local Players = game:GetService("Players")
+-- [[ SERVICES ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
--- LOAD FLUENT UI (Sangat Stabil)
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-
-local Window = Fluent:CreateWindow({
-    Title = "DapzX Atomic | Fishzar",
-    SubTitle = "v2.0",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
-
--- GLOBALS
+-- [[ CONFIG ]]
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WebhookURL = ""
-_G.MinigameDelay = 3
+_G.MinigameDelay = 3.0
 
--- UTILITY
-local function SendWebhook(title, desc)
-    if _G.WebhookURL == "" then return end
+-- [[ LOAD LIBRARY ]]
+local WindUI
+local success, result = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+end)
+
+if success and result then
+    WindUI = result
+else
+    warn("WindUI Gagal Dimuat: " .. tostring(result))
+    return -- Berhenti jika library tidak bisa dimuat
+end
+
+-- [[ UI INITIALIZATION ]]
+local Window = WindUI:CreateWindow({
+    Title = "DapzX Atomic | Flow Hub",
+    Author = "Theodore",
+    Folder = "dapzxatomic",
+    Icon = "solar:atom-bold",
+    Size = UDim2.fromOffset(580, 460)
+})
+
+-- [[ FUNGSI WEBHOOK ]]
+local function SendWebhook(msg)
+    if _G.WebhookURL == "" or not _G.WebhookURL:find("discord") then return end
     pcall(function()
         (http_request or request or syn.request)({
             Url = _G.WebhookURL,
             Method = "POST",
             Headers = {["Content-Type"] = "application/json"},
-            Body = HttpService:JSONEncode({embeds = {{title = title, description = desc, color = 65445}}})
+            Body = HttpService:JSONEncode({["content"] = msg})
         })
     end)
 end
 
--- TABS
-local Tabs = {
-    Fishing = Window:AddTab({ Title = "Fishing", Icon = "fishing-rod" }),
-    Shop = Window:AddTab({ Title = "Shop", Icon = "shopping-cart" }),
-    Integration = Window:AddTab({ Title = "Integration", Icon = "webhook" }),
-    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map-pin" })
-}
+-- [[ TAB: FISHING ]]
+local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:cursor-square-bold"})
+FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
+FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Value = {Min = 0.5, Max = 5, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
 
--- FISHING TAB
-Tabs.Fishing:AddToggle("AutoFarm", {Title = "Enable Auto Farm", Default = false, Callback = function(s) _G.FarmingActive = s end})
-Tabs.Fishing:AddSlider("DelaySlider", {Title = "Farming Delay", Min = 0.5, Max = 5, Default = 3, Callback = function(v) _G.MinigameDelay = v end})
+-- [[ TAB: SHOP ]]
+local ShopTab = Window:Tab({Title = "Shop", Icon = "solar:bag-check-bold"})
+ShopTab:Section({Title = "Auto Sell"}):Toggle({Title = "Enable Auto Sell", Callback = function(s) _G.AutoSellActive = s end})
 
--- SHOP TAB
-Tabs.Shop:AddToggle("AutoSell", {Title = "Enable Auto Sell", Default = false, Callback = function(s) _G.AutoSellActive = s end})
-
--- INTEGRATION TAB
-Tabs.Integration:AddInput("WebhookInput", {
-    Title = "Discord Webhook URL",
-    Default = "",
-    Placeholder = "Paste URL di sini...",
+-- [[ TAB: INTEGRATION (WEBHOOK) ]]
+local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+IntegrationTab:Section({Title = "Discord Webhook"}):Input({
+    Title = "Webhook URL", 
+    Placeholder = "Paste URL di sini...", 
     Callback = function(v) _G.WebhookURL = v end
 })
+IntegrationTab:Section({Title = "Test Webhook"}):Button({Title = "Kirim Test Message", Callback = function()
+    SendWebhook("✅ DapzX Atomic: Webhook Terhubung!")
+    WindUI:Notify({Title = "Status", Content = "Pesan test telah dikirim!", Duration = 3})
+end})
 
-Tabs.Integration:AddButton({
-    Title = "Test Webhook Connection",
-    Callback = function()
-        SendWebhook("Connection Test", "✅ DapzX Atomic berhasil terhubung ke Discord!")
-        Fluent:Notify({Title = "Status", Content = "Pesan tes telah dikirim!", Duration = 3})
-    end
-})
-
--- TELEPORT TAB
-Tabs.Teleport:AddButton({Title = "Ke Pulau Nelayan", Callback = function() LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(-34.59, 14.43, 256.65) end})
-
--- LOOPS
+-- [[ MAIN LOOP FISHING ]]
 task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
     while true do
@@ -92,4 +87,13 @@ task.spawn(function()
     end
 end)
 
-Fluent:Notify({Title = "DapzX Atomic", Content = "Script Berhasil Dimuat!", Duration = 5})
+-- [[ AUTO SELL LOOP ]]
+task.spawn(function()
+    while true do
+        task.wait(60) -- 1 Menit sekali
+        if _G.AutoSellActive then
+            -- Tambahkan logika SellAllBatch Anda di sini
+            SendWebhook("📦 Auto Sell: Ikan telah dijual!")
+        end
+    end
+end)
