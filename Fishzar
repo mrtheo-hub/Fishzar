@@ -1,11 +1,10 @@
--- [[ DAPZX ATOMIC | FISHZAR V5.1.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V5.5.0 - HYBRID PRO ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 -- [[ 1. LOADING SCREEN ]]
@@ -22,16 +21,33 @@ local function CreateLoadingScreen()
 end
 CreateLoadingScreen()
 
--- [[ 2. CONFIG ]]
-_G.Version = "v5.1.0"
+-- [[ 2. CONFIG & MODULES ]]
+_G.Version = "v5.5.0"
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WalkOnWater = false
 _G.WebhookURL = ""
-_G.SettingsDelay = 3.0 -- Ini yang Anda cari
+_G.SettingsDelay = 3.0
 _G.FilterRarity = {["Common"]=true,["Uncommon"]=true,["Rare"]=true,["Epic"]=true,["Legendary"]=true,["Secret"]=true}
 
--- [[ 3. WEBHOOK LOGIC (BACKPACK WATCHER) ]]
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
+local FishingModules = FishingSystem and FishingSystem:WaitForChild("FishingModules", 10)
+local AnimController, CastingModule
+
+if FishingModules then
+    pcall(function() AnimController = require(FishingModules:WaitForChild("AnimationController")) end)
+    pcall(function() CastingModule = require(FishingModules:WaitForChild("CastingSystem")) end)
+end
+
+-- [[ 3. UTILITY FUNCTIONS ]]
+local function GetRodTip(character)
+    local activeSkin = character:FindFirstChild("ActiveSkinModel")
+    if activeSkin then return activeSkin:FindFirstChild("Tip") or activeSkin:FindFirstChild("Part") or activeSkin:FindFirstChild("Handle") end
+    local rod = character:FindFirstChildWhichIsA("Tool")
+    if rod then return rod:FindFirstChild("Part") or rod:FindFirstChild("Handle") end
+    return nil
+end
+
 local function SendWebhook(item)
     if not _G.WebhookURL or _G.WebhookURL == "" then return end
     local rarity = item:GetAttribute("rarity") or (item:FindFirstChild("Stats") and item.Stats:FindFirstChild("Rarity") and item.Stats.Rarity.Value) or "Unknown"
@@ -51,6 +67,7 @@ local function SendWebhook(item)
     pcall(function() (http_request or request or syn.request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)}) end)
 end
 
+-- Webhook Watcher
 LocalPlayer.Backpack.ChildAdded:Connect(function(item)
     if item:IsA("Tool") then task.wait(1); SendWebhook(item) end
 end)
@@ -74,49 +91,85 @@ STab:Section({Title = "Auto Sell"}):Toggle({Title = "Enable Auto Sell", Callback
 
 local TTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
 local Islands = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Pulau Crystaliz"] = Vector3.new(203, 13, -2614), ["Megalodon Zone"] = Vector3.new(3125, 9, -1713)}
-for name, pos in pairs(Islands) do TTab:Section({Title = name}):Button({Title = "Teleport", Callback = function() LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end}) end
+for name, pos in pairs(Islands) do TTab:Section({Title = name}):Button({Title = "Teleport", Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end end}) end
 
 local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-ITab:Section({Title = "Webhook URL"}):Input({Title = "Paste Link", Callback = function(v) _G.WebhookURL = v; pcall(function() (http_request or request)({Url=v, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode({embeds={{title="✅ Connected", color=65280}}})}) end) end})
+ITab:Section({Title = "Webhook URL"}):Input({Title = "Paste URL", Callback = function(v) 
+    _G.WebhookURL = v 
+    pcall(function() (http_request or request)({Url=v, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode({embeds={{title="✅ Connected!", color=65280}}})}) end)
+end})
 local FSec = ITab:Section({Title = "Filter Rarity"})
 for _, r in pairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}) do
     FSec:Toggle({Title = r, Value = true, Callback = function(s) _G.FilterRarity[r] = s end})
 end
 
 -- [[ 5. MAIN LOOPS ]]
+
+-- Walk On Water
+local WaterPart
 RunService.RenderStepped:Connect(function()
     if _G.WalkOnWater and LocalPlayer.Character then
-        local p = LocalPlayer.Character.HumanoidRootPart.Position
-        if not workspace:FindFirstChild("WaterPart") then local part = Instance.new("Part", workspace); part.Name = "WaterPart"; part.Anchored = true; part.Transparency = 1; part.Size = Vector3.new(1000, 1, 1000) end
-        workspace.WaterPart.Position = Vector3.new(p.X, 4.5, p.Z)
+        if not workspace:FindFirstChild("WaterPart") then 
+            local p = Instance.new("Part", workspace); p.Name = "WaterPart"; p.Anchored = true; p.Transparency = 1; p.Size = Vector3.new(1000, 1, 1000) 
+        end
+        workspace.WaterPart.Position = Vector3.new(LocalPlayer.Character.HumanoidRootPart.Position.X, 4.5, LocalPlayer.Character.HumanoidRootPart.Position.Z)
     elseif workspace:FindFirstChild("WaterPart") then workspace.WaterPart:Destroy() end
 end)
 
+-- AUTO FARM (NEW INSPIRATION METHOD)
 task.spawn(function()
-    local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
     while true do
-        task.wait(1)
-        if _G.FarmingActive and LocalPlayer.Character then
-            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool") or LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
-            if tool then
-                if tool.Parent ~= LocalPlayer.Character then LocalPlayer.Character.Humanoid:EquipTool(tool) end
-                local root = LocalPlayer.Character.HumanoidRootPart
-                local castPos = root.Position + (root.CFrame.LookVector * 15)
+        task.wait(0.5)
+        if _G.FarmingActive and FishingSystem then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local tool = char and char:FindFirstChildWhichIsA("Tool")
                 
-                FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 100)
-                task.wait(_G.SettingsDelay) -- Delay Tarik
-                FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
-                task.wait(0.5); FishingSystem.CleanupCast:FireServer(); task.wait(1.5)
-            end
+                if not tool then
+                    for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do
+                        if v:IsA("Tool") and (v.Name:lower():find("rod") or v:FindFirstChild("Handle")) then
+                            char.Humanoid:EquipTool(v); task.wait(0.5); break
+                        end
+                    end
+                    tool = char:FindFirstChildWhichIsA("Tool")
+                end
+
+                if char and root and tool then
+                    local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
+                    
+                    -- Start Cast
+                    if AnimController then AnimController:Play("PrepareCast", 0.1) end
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5 + math.random())
+                    
+                    task.wait(1.5)
+                    FishingSystem.PrecalcFish:InvokeServer()
+                    task.wait(0.5)
+
+                    -- Alert Hook
+                    if AnimController then AnimController:Play("PullingAnimation", 0.1) end
+                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+
+                    task.wait(_G.SettingsDelay) -- Tarik sesuai slider
+                    
+                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    task.wait(0.3)
+
+                    FishingSystem.CleanupCast:FireServer()
+                    if AnimController then AnimController:Play("EquippedAnimation", 0.3) end
+                    task.wait(1.5)
+                end
+            end)
         end
     end
 end)
 
+-- AUTO SELL
 task.spawn(function()
     while true do
         task.wait(15)
         if _G.AutoSellActive then
-            local sellRemote = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
+            local sellRemote = FishingSystem and FishingSystem:FindFirstChild("SellFish")
             local items = {}
             for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do if v:IsA("Tool") then table.insert(items, v) end end
             if #items > 0 and sellRemote then sellRemote:FireServer("SellAllBatch", items) end
