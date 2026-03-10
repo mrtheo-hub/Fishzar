@@ -1,4 +1,4 @@
--- [[ DapzX Atomic - Version 10.0 (Hybrid Clicker) ]] --
+-- [[ FlowHUB - Version 10.0 ]] --
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -11,8 +11,8 @@ local VIM = game:GetService("VirtualInputManager") -- Simulasi Input
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v10 Hybrid",
-    Author = "by DapzX",
+    Title = "FlowHUB | v10",
+    Author = "by Theo",
     Folder = "fishzar_v10",
     Icon = "solar:mouse-bold",
     Size = UDim2.fromOffset(580, 460),
