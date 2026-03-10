@@ -1,82 +1,124 @@
--- [[ DapzX Atomic - Version 1.0 (The Resilient Fix) ]] --
-
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+
+local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
 -- ============================================================================
--- LOAD LOADER (Tanpa Yield/Nyangkut)
+-- WINDUI LOADER
 -- ============================================================================
-local WindUI
-local success, err = pcall(function()
-    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-end)
-
-if not success then warn("UI Gagal dimuat: " .. tostring(err)) return end
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ============================================================================
 -- GLOBAL CONFIG
 -- ============================================================================
 _G.FarmingActive = false
 _G.ScriptRunning = true
-_G.MinigameDelay = 1.0 -- Dipercepat jadi 1.0 (Instant)
+_G.MinigameDelay = 3.0
 _G.AutoSellActive = false
+_G.AutoSellDelay = 1
+_G.WebhookURL = ""
+
+local Islands = {
+    ["Pulau Nelayan"] = Vector3.new(-34.59, 14.43, 256.65),
+    ["Pulau Aquarist"] = Vector3.new(-2032.36, 12.97, -833.78),
+    ["Pulau Criystializ"] = Vector3.new(203.47, 13.09, -2614.84),
+    ["Megalodon Zone"] = Vector3.new(3125.59, 9.58, -1713.42)
+}
 
 -- ============================================================================
--- CORE FARMING LOOP (DIPERBAIKI)
+-- UTILITY & WEBHOOK
+-- ============================================================================
+local function SendWebhook(fishList)
+    if _G.WebhookURL == "" or not _G.WebhookURL:find("discord.com") then return end
+    local fields = {}
+    for i, v in ipairs(fishList) do
+        if i > 10 then break end
+        table.insert(fields, {["name"] = "🐟 " .. v.fishId, ["value"] = "Rarity: " .. v.rarity .. "\nWeight: " .. v.weight .. "kg", ["inline"] = true})
+    end
+    local data = {["embeds"] = {{["title"] = "🎣 Fish Sold!", ["description"] = "Berhasil menjual " .. #fishList .. " ikan.", ["color"] = 65445, ["fields"] = fields}}}
+    pcall(function() (http_request or request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
+end
+
+local function GetFishData(tool)
+    if not tool or not tool:IsA("Tool") then return nil end
+    local fId = tool:GetAttribute("fishId") or tool:GetAttribute("FishId")
+    local w = tool:GetAttribute("weight") or tool:GetAttribute("Weight")
+    local r = tool:GetAttribute("rarity") or tool:GetAttribute("Rarity")
+    return (fId and w and r) and {["weight"] = tonumber(w), ["rarity"] = tostring(r), ["fishId"] = tostring(fId)} or nil
+end
+
+local function SellAllBatch()
+    local fishBatch = {}
+    local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
+    if not sellEvent then return end
+    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+        local data = GetFishData(item)
+        if data then table.insert(fishBatch, data) end
+    end
+    if #fishBatch > 0 then
+        sellEvent:FireServer("SellAllBatch", fishBatch)
+        SendWebhook(fishBatch)
+    end
+end
+
+-- ============================================================================
+-- UI CREATION
+-- ============================================================================
+local Window = WindUI:CreateWindow({Title = "Flow Hub | Fishzar", Author = "by Theodore", Folder = "dapzxatomic", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
+
+-- TAB: FISHING
+local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:cursor-square-bold"})
+FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Value = false, Callback = function(s) _G.FarmingActive = s end})
+FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Step = 0.5, Value = {Min = 0.5, Max = 5, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
+
+-- TAB: SHOP
+local ShopTab = Window:Tab({Title = "Shop", Icon = "solar:bag-check-bold"})
+ShopTab:Section({Title = "Auto Sell"}):Toggle({Title = "Enable Auto Sell", Value = false, Callback = function(s) _G.AutoSellActive = s end})
+ShopTab:Section({Title = "Interval"}):Slider({Title = "Menit", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) _G.AutoSellDelay = v end})
+
+-- TAB: INTEGRATION (NEW)
+local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+IntegrationTab:Section({Title = "Discord Webhook"}):Input({Title = "Webhook URL", Placeholder = "Paste URL di sini...", Callback = function(v) _G.WebhookURL = v end})
+
+-- TAB: TELEPORT
+local TeleportTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
+for name, pos in pairs(Islands) do
+    TeleportTab:Section({Title = name}):Button({Title = "Teleport ke " .. name, Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end end})
+end
+
+-- ============================================================================
+-- LOOPS
 -- ============================================================================
 task.spawn(function()
     while _G.ScriptRunning do
+        task.wait(1)
+        if _G.AutoSellActive then
+            task.wait(_G.AutoSellDelay * 60)
+            if _G.AutoSellActive then pcall(SellAllBatch) end
+        end
+    end
+end)
+
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
+task.spawn(function()
+    while _G.ScriptRunning do
         task.wait(0.5)
-        
-        -- Gunakan FindFirstChild agar tidak Infinite Yield
-        local FishingSystem = ReplicatedStorage:FindFirstChild("FishingSystem")
-        
-        if _G.FarmingActive and FishingSystem then
-            pcall(function()
-                local character = LocalPlayer.Character
-                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                local rod = character and character:FindFirstChildWhichIsA("Tool")
-                
-                if rootPart and rod then
-                    local castPos = rootPart.Position + (rootPart.CFrame.LookVector * 15)
-                    local rodName = rod.Name
-                    
-                    -- 1. Cast
-                    if FishingSystem:FindFirstChild("CastReplication") then
-                        FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, rodName, 100)
-                    end
-                    
-                    -- 2. Wait
-                    task.wait(0.5) 
-                    
-                    -- 3. Spoof Precalc (Tanpa InvokeServer yang berisiko crash)
-                    if FishingSystem:FindFirstChild("PrecalcFish") then
-                        pcall(function() FishingSystem.PrecalcFish:InvokeServer() end)
-                    end
-                    
-                    -- 4. Instant Pull Signal
-                    if FishingSystem:FindFirstChild("ReplicatePullAlert") then
-                        FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-                    end
-                    
-                    -- 5. Delay Instant
-                    task.wait(_G.MinigameDelay)
-                    
-                    -- 6. Claim Fish
-                    if FishingSystem:FindFirstChild("FishGiver") then
-                        FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    end
-                    
-                    -- 7. Cleanup
-                    if FishingSystem:FindFirstChild("CleanupCast") then
-                        FishingSystem.CleanupCast:FireServer()
-                    end
-                    
-                    task.wait(0.2)
-                end
-            end)
+        if _G.FarmingActive and LocalPlayer.Character then
+            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            if tool then
+                local root = LocalPlayer.Character.HumanoidRootPart
+                local castPos = root.Position + (root.CFrame.LookVector * 15)
+                FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
+                task.wait(1.5)
+                FishingSystem.PrecalcFish:InvokeServer()
+                task.wait(_G.MinigameDelay)
+                FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
+                FishingSystem.CleanupCast:FireServer()
+                task.wait(1)
+            end
         end
     end
 end)
