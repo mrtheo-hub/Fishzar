@@ -1,4 +1,4 @@
--- [[ DAPZX ATOMIC | FISHZAR V2.5.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V3.0.0 ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -8,7 +8,7 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
--- [[ 1. LOADING SCREEN ]]
+-- [[ 1. LOADING SCREEN (DISESUAIKAN) ]]
 local function CreateLoadingScreen()
     local Screen = Instance.new("ScreenGui", CoreGui)
     local Frame = Instance.new("Frame", Screen)
@@ -16,9 +16,9 @@ local function CreateLoadingScreen()
     Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     
     local Logo = Instance.new("ImageLabel", Frame)
-    Logo.Image = "rbxassetid://88673887911141" -- Logo Anda
-    Logo.Size = UDim2.new(0, 200, 0, 200)
-    Logo.Position = UDim2.new(0.5, -100, 0.5, -100)
+    Logo.Image = "rbxassetid://88673887911141"
+    Logo.Size = UDim2.new(0, 150, 0, 150) -- Ukuran lebih pas
+    Logo.Position = UDim2.new(0.5, -75, 0.5, -75)
     Logo.BackgroundTransparency = 1
     
     task.wait(2)
@@ -32,11 +32,11 @@ CreateLoadingScreen()
 -- [[ 2. LOAD UI ]]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- [[ 3. CONFIG & GLOBALS ]]
+-- [[ 3. CONFIG ]]
+_G.Version = "v3.0.0"
 _G.FarmingActive = false
 _G.WalkOnWater = false
 _G.WebhookURL = ""
-_G.MinigameDelay = 3.0
 _G.FilterRarity = { ["Rare"] = true, ["Epic"] = true, ["Legendary"] = true, ["Secret"] = true }
 
 -- [[ 4. UTILITIES ]]
@@ -47,81 +47,69 @@ RunService.RenderStepped:Connect(function()
     if _G.WalkOnWater then
         if not WaterPlatform then
             WaterPlatform = Instance.new("Part", workspace)
-            WaterPlatform.Anchored = true; WaterPlatform.Transparency = 1; WaterPlatform.CanCollide = true; WaterPlatform.Size = Vector3.new(300, 1, 300)
+            WaterPlatform.Anchored = true; WaterPlatform.Transparency = 1; WaterPlatform.CanCollide = true; WaterPlatform.Size = Vector3.new(400, 1, 400)
         end
         local pos = LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position
         if pos then WaterPlatform.Position = Vector3.new(pos.X, 4.5, pos.Z) end
     elseif WaterPlatform then WaterPlatform:Destroy(); WaterPlatform = nil end
 end)
 
-local function GetFishData(tool)
-    if not tool or not tool:IsA("Tool") then return nil end
-    local fId = tool:GetAttribute("fishId") or tool.Name
-    local w = tool:GetAttribute("weight") or 0
-    local r = tool:GetAttribute("rarity") or "Common"
-    return {weight = w, rarity = r, fishId = fId}
-end
-
-local function SendFishWebhook(data)
-    if _G.WebhookURL == "" or not _G.FilterRarity[data.rarity] then return end
-    local payload = {embeds = {{
-        title = "🎣 Ikan Tertangkap!",
-        color = 65445,
-        fields = {
-            {name = "Nama", value = data.fishId, inline = true},
-            {name = "Rarity", value = data.rarity, inline = true},
-            {name = "Berat", value = data.weight .. " kg", inline = true},
-            {name = "Waktu", value = os.date("%H:%M:%S"), inline = true}
-        }
-    }}}
-    (http_request or request or syn.request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)})
-end
-
 -- [[ 5. UI INTERFACE ]]
 local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
-Window:Tag({Title = "Executor: " .. (identifyexecutor() or "Unknown"), Icon = "solar:cpu-bolt-bold", Color = Color3.fromHex("#06FFA5"), Border = true})
+Window:Tag({Title = "Version: " .. _G.Version, Icon = "solar:shield-check-bold", Color = Color3.fromHex("#F48C06")})
+Window:Tag({Title = "Executor: " .. (identifyexecutor() or "Unknown"), Icon = "solar:cpu-bolt-bold", Color = Color3.fromHex("#06FFA5")})
 
+-- TAB: LOCAL PLAYER
+local PlayerTab = Window:Tab({Title = "Local Player", Icon = "solar:user-bold"})
+PlayerTab:Section({Title = "Movement"}):Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
+
+-- TAB: FISHING
 local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:cursor-square-bold"})
-FishingTab:Section({Title = "Farming"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
-FishingTab:Section({Title = "Utility"}):Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
+FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
+FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Value = {Min = 0.5, Max = 5, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
 
+-- TAB: TELEPORT
 local TeleportTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
-local Islands = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Megalodon Zone"] = Vector3.new(3125, 9, -1713)}
+local Islands = {
+    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256),
+    ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833),
+    ["Pulau Criystializ"] = Vector3.new(203, 13, -2614),
+    ["Megalodon Zone"] = Vector3.new(3125, 9, -1713)
+}
 for name, pos in pairs(Islands) do
     TeleportTab:Section({Title = name}):Button({Title = "Teleport", Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end end})
 end
 
+-- TAB: INTEGRATION
 local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-IntegrationTab:Section({Title = "Discord"}):Input({Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end})
+IntegrationTab:Section({Title = "Discord Webhook"}):Input({Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end})
+IntegrationTab:Section({Title = "Rarity Filter"}):Toggle({Title = "Filter Rare", Callback = function(s) _G.FilterRarity["Rare"] = s end})
+IntegrationTab:Section({Title = " "}):Toggle({Title = "Filter Epic", Callback = function(s) _G.FilterRarity["Epic"] = s end})
+IntegrationTab:Section({Title = " "}):Toggle({Title = "Filter Legendary", Callback = function(s) _G.FilterRarity["Legendary"] = s end})
 
--- [[ 6. MAIN LOOP ]]
+-- [[ 6. LOOP ]]
 task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
     while true do
         task.wait(1)
         if _G.FarmingActive and LocalPlayer.Character then
             -- Auto Equip
-            for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                if item:IsA("Tool") and item:FindFirstChild("Handle") then LocalPlayer.Character.Humanoid:EquipTool(item); break end
+            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            if not tool then
+                for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+                    if item:IsA("Tool") then LocalPlayer.Character.Humanoid:EquipTool(item); break end
+                end
             end
             
-            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
             if tool then
                 local root = LocalPlayer.Character.HumanoidRootPart
                 local castPos = root.Position + (root.CFrame.LookVector * 15)
                 FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                task.wait(2 + _G.MinigameDelay)
+                task.wait(2 + (_G.MinigameDelay or 3))
                 FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
-                
-                -- Webhook Logic
-                task.wait(0.5)
-                for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                    local data = GetFishData(item)
-                    if data then SendFishWebhook(data) end
-                end
-                
                 FishingSystem.CleanupCast:FireServer()
-                task.wait(7) -- Delay Webhook/Ikan
+                task.wait(7) -- Delay Webhook
             end
         end
     end
