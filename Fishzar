@@ -1,4 +1,4 @@
--- [[ DapzX Atomic - Version 3.4 (Ultimate Fix) ]] --
+-- [[ DapzX Atomic - Version 3.5 (Instant Catch Logic Fix) ]] --
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,21 +7,16 @@ local LocalPlayer = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
 
 -- ============================================================================
--- ROBUST WINDUI LOADER
+-- WINDUI LOADER
 -- ============================================================================
 local WindUIProvider = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))
-local WindUI = WindUIProvider() -- Memanggil fungsi untuk mendapatkan tabel library
-
--- Tunggu sebentar sampai library benar-benar siap
-if not WindUI then
-    repeat task.wait(0.1) until WindUI ~= nil
-end
+local WindUI = WindUIProvider()
 
 -- ============================================================================
 -- GLOBAL CONFIG
 -- ============================================================================
 _G.FarmingActive = false
-_G.CatchDelay = 1.5 
+_G.CatchDelay = 0.5 -- Coba mulai dari 0.5 detik
 _G.AutoSellActive = false
 _G.AutoSellDelay = 1
 _G.AntiAFK = true
@@ -43,7 +38,7 @@ local Islands = {
 }
 
 -- ============================================================================
--- UTILITY
+-- UTILITY (Auto Sell)
 -- ============================================================================
 local function GetFishData(tool)
     if not tool or not tool:IsA("Tool") then return nil end
@@ -71,7 +66,7 @@ end
 -- UI INITIALIZATION
 -- ============================================================================
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v3.4",
+    Title = "DapzX Atomic | v3.5 Logic",
     Author = "by DapzX",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
@@ -79,12 +74,10 @@ local Window = WindUI:CreateWindow({
     OpenButton = { Enabled = true, Draggable = true }
 })
 
--- TABS
 local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
 local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:bag-check-bold" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
 
--- FISHING SECTION
 FishingTab:Section({ Title = "Auto Farm" }):Toggle({
     Title = "Enable Farm",
     Value = false,
@@ -92,20 +85,19 @@ FishingTab:Section({ Title = "Auto Farm" }):Toggle({
 })
 
 FishingTab:Section({ Title = "Timing" }):Slider({
-    Title = "Catch Delay (Detik)",
+    Title = "Catch Speed (Detik)",
+    Desc = "0.1 = Instant | 1.5 = Normal",
     Step = 0.1,
-    Value = {Min = 0.1, Max = 5.0, Default = 1.5},
+    Value = {Min = 0.1, Max = 3.0, Default = 0.5},
     Callback = function(v) _G.CatchDelay = v end
 })
 
--- SHOP SECTION
 ShopTab:Section({ Title = "Auto Sell" }):Toggle({
     Title = "Enable Auto Sell",
     Value = false,
     Callback = function(v) _G.AutoSellActive = v end
 })
 
--- TELEPORT SECTION
 TeleportTab:Section({ Title = "Quick Travel" }):Dropdown({
     Title = "Pilih Lokasi",
     Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ", "Megalodon Zone"},
@@ -119,7 +111,7 @@ TeleportTab:Section({ Title = "Quick Travel" }):Dropdown({
 })
 
 -- ============================================================================
--- CORE LOGIC
+-- THE FIX: RE-WORKED CORE LOGIC
 -- ============================================================================
 local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 15)
 
@@ -134,18 +126,32 @@ task.spawn(function()
                 
                 if root and tool then
                     local rodName = tool.Name
-                    local castPos = root.Position + (root.CFrame.LookVector * 15)
+                    -- Menambah sedikit random pada posisi cast agar tidak dianggap bot statis
+                    local castPos = root.Position + (root.CFrame.LookVector * (15 + math.random(1,3)))
                     
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 98)
-                    task.wait(1.2)
+                    -- 1. LEMPAR
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 100)
+                    
+                    -- 2. TUNGGU SERVER INITIALIZE (Sangat Penting)
+                    task.wait(0.8) 
+                    
+                    -- 3. TRIGGER IKAN
                     FishingSystem.PrecalcFish:InvokeServer()
+                    
+                    -- 4. KIRIM SINYAL MINIGAME DIMULAI
                     FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
                     
-                    task.wait(_G.CatchDelay) -- Delay yang bisa diatur
+                    -- 5. JEDA INSTANT (Gunakan Slider)
+                    -- Jika diset 0.1, maka akan langsung tarik
+                    task.wait(_G.CatchDelay) 
                     
+                    -- 6. TARIK (Gunakan argumen hookPosition yang akurat)
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    
+                    -- 7. CLEANUP & JEDA ANTAR LEMPARAN
                     task.wait(0.2)
                     FishingSystem.CleanupCast:FireServer()
+                    task.wait(0.5) -- Jangan hapus jeda ini agar tidak kena spam detect
                 end
             end)
         end
@@ -156,7 +162,7 @@ end)
 task.spawn(function()
     local lastSell = tick()
     while _G.ScriptRunning do
-        task.wait(2)
+        task.wait(5)
         if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
             SellAllBatch()
             lastSell = tick()
@@ -164,4 +170,4 @@ task.spawn(function()
     end
 end)
 
-WindUI:Notify({ Title = "Success", Content = "DapzX Atomic Loaded!", Duration = 3 })
+WindUI:Notify({ Title = "DapzX v3.5", Content = "Logic Fix Applied! Enjoy.", Duration = 3 })
