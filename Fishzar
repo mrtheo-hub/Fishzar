@@ -1,127 +1,82 @@
--- [[ DapzX Atomic - Version 11.0 (UI & Logic Bypass) ]] --
+-- [[ DapzX Atomic - Version 1.0 (The Resilient Fix) ]] --
 
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local VIM = game:GetService("VirtualInputManager")
 
 -- ============================================================================
--- UI LOADER
+-- LOAD LOADER (Tanpa Yield/Nyangkut)
 -- ============================================================================
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v11 Final",
-    Author = "by DapzX",
-    Folder = "fishzar_v11",
-    Icon = "solar:ghost-bold",
-    Size = UDim2.fromOffset(580, 460),
-    OpenButton = { Enabled = true, Draggable = true }
-})
+local WindUI
+local success, err = pcall(function()
+    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+end)
+
+if not success then warn("UI Gagal dimuat: " .. tostring(err)) return end
 
 -- ============================================================================
--- CONFIG
+-- GLOBAL CONFIG
 -- ============================================================================
 _G.FarmingActive = false
-_G.InstantWin = true
+_G.ScriptRunning = true
+_G.MinigameDelay = 1.0 -- Dipercepat jadi 1.0 (Instant)
+_G.AutoSellActive = false
 
 -- ============================================================================
--- THE "ANTI-BENGONG" ENGINE
--- ============================================================================
-local function AutoCast()
-    local char = LocalPlayer.Character
-    local tool = char and char:FindFirstChildWhichIsA("Tool")
-    
-    -- 1. Cari tombol Cast di ScreenGui (Fishzar biasanya punya UI tombol di HP/PC)
-    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-    local CastBtn = PlayerGui:FindFirstChild("Cast", true) or PlayerGui:FindFirstChild("Fish", true) or PlayerGui:FindFirstChild("Throw", true)
-
-    if CastBtn and CastBtn:IsA("GuiButton") and CastBtn.Visible then
-        -- Jika ada tombol di layar, kita klik tombolnya
-        local pos = CastBtn.AbsolutePosition
-        local size = CastBtn.AbsoluteSize
-        VIM:SendMouseButtonEvent(pos.X + (size.X/2), pos.Y + (size.Y/2) + 50, 0, true, game, 1)
-        task.wait(0.1)
-        VIM:SendMouseButtonEvent(pos.X + (size.X/2), pos.Y + (size.Y/2) + 50, 0, false, game, 1)
-    else
-        -- Jika tidak ada tombol, gunakan simulasi klik tengah layar (Tahan 1 detik untuk Power)
-        local viewportSize = workspace.CurrentCamera.ViewportSize
-        local centerX, centerY = viewportSize.X / 2, viewportSize.Y / 2
-        
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
-        task.wait(1.1) -- Tahan untuk power pancingan
-        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
-    end
-end
-
--- ============================================================================
--- THE INSTANT WIN ENGINE (Mencari UI Minigame)
+-- CORE FARMING LOOP (DIPERBAIKI)
 -- ============================================================================
 task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if _G.FarmingActive and _G.InstantWin then
+    while _G.ScriptRunning do
+        task.wait(0.5)
+        
+        -- Gunakan FindFirstChild agar tidak Infinite Yield
+        local FishingSystem = ReplicatedStorage:FindFirstChild("FishingSystem")
+        
+        if _G.FarmingActive and FishingSystem then
             pcall(function()
-                local PlayerGui = LocalPlayer.PlayerGui
-                -- Cari UI Minigame Fishzar (biasanya namanya Minigame atau FishingUI)
-                local MiniGameUI = PlayerGui:FindFirstChild("Minigame", true) or PlayerGui:FindFirstChild("Fishing", true)
+                local character = LocalPlayer.Character
+                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                local rod = character and character:FindFirstChildWhichIsA("Tool")
                 
-                if MiniGameUI and MiniGameUI.Enabled == true then
-                    -- Tembak Remote Menang secara Agresif saat UI muncul
-                    local FishingSystem = game:GetService("ReplicatedStorage"):FindFirstChild("FishingSystem")
-                    if FishingSystem then
-                        local win = FishingSystem:FindFirstChild("WinMinigame") or FishingSystem:FindFirstChild("MinigameFinish")
-                        if win then
-                            win:FireServer(true)
-                            task.wait(0.5)
-                            local give = FishingSystem:FindFirstChild("FishGiver")
-                            if give then give:FireServer() end
-                        end
+                if rootPart and rod then
+                    local castPos = rootPart.Position + (rootPart.CFrame.LookVector * 15)
+                    local rodName = rod.Name
+                    
+                    -- 1. Cast
+                    if FishingSystem:FindFirstChild("CastReplication") then
+                        FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, rodName, 100)
                     end
+                    
+                    -- 2. Wait
+                    task.wait(0.5) 
+                    
+                    -- 3. Spoof Precalc (Tanpa InvokeServer yang berisiko crash)
+                    if FishingSystem:FindFirstChild("PrecalcFish") then
+                        pcall(function() FishingSystem.PrecalcFish:InvokeServer() end)
+                    end
+                    
+                    -- 4. Instant Pull Signal
+                    if FishingSystem:FindFirstChild("ReplicatePullAlert") then
+                        FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+                    end
+                    
+                    -- 5. Delay Instant
+                    task.wait(_G.MinigameDelay)
+                    
+                    -- 6. Claim Fish
+                    if FishingSystem:FindFirstChild("FishGiver") then
+                        FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    end
+                    
+                    -- 7. Cleanup
+                    if FishingSystem:FindFirstChild("CleanupCast") then
+                        FishingSystem.CleanupCast:FireServer()
+                    end
+                    
+                    task.wait(0.2)
                 end
             end)
         end
     end
 end)
-
--- ============================================================================
--- MAIN TAB
--- ============================================================================
-local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Section({ Title = "Fishzar God Mode" }):Toggle({
-    Title = "Ultimate Auto Farm",
-    Value = false,
-    Callback = function(v) _G.FarmingActive = v end
-})
-
--- ============================================================================
--- LOOP UTAMA
--- ============================================================================
-task.spawn(function()
-    while true do
-        task.wait(2) -- Jeda antar lemparan
-        if _G.FarmingActive then
-            -- Pastikan pancingan siap
-            local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-            if not tool then
-                local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
-                if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
-            end
-            
-            -- Cek apakah sedang memancing (melihat ada kail di workspace)
-            local hasHook = false
-            for _, v in pairs(workspace:GetChildren()) do
-                if (v.Name:find("Hook") or v.Name:find("Bobber")) and v:FindFirstChild("Owner") and v.Owner.Value == LocalPlayer.Name then
-                    hasHook = true
-                    break
-                end
-            end
-            
-            if not hasHook then
-                AutoCast()
-                task.wait(3) -- Tunggu kail meluncur
-            end
-        end
-    end
-end)
-
-WindUI:Notify({ Title = "Atomic v11", Content = "Final Bypass Loaded!", Duration = 5 })
