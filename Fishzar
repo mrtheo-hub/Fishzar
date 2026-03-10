@@ -1,20 +1,19 @@
--- [[ FlowHUB - Version 10.0 ]] --
+-- [[ DapzX Atomic - Version 11.0 (UI & Logic Bypass) ]] --
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local VIM = game:GetService("VirtualInputManager") -- Simulasi Input
+local RunService = game:GetService("RunService")
+local VIM = game:GetService("VirtualInputManager")
 
 -- ============================================================================
 -- UI LOADER
 -- ============================================================================
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-
 local Window = WindUI:CreateWindow({
-    Title = "FlowHUB | v10",
-    Author = "by Theo",
-    Folder = "fishzar_v10",
-    Icon = "solar:mouse-bold",
+    Title = "DapzX Atomic | v11 Final",
+    Author = "by DapzX",
+    Folder = "fishzar_v11",
+    Icon = "solar:ghost-bold",
     Size = UDim2.fromOffset(580, 460),
     OpenButton = { Enabled = true, Draggable = true }
 })
@@ -23,60 +22,60 @@ local Window = WindUI:CreateWindow({
 -- CONFIG
 -- ============================================================================
 _G.FarmingActive = false
-_G.ClickInterval = 1.0 -- Jeda antar klik
-_G.InstantBypass = true -- Tetap coba tembak remote Win
+_G.InstantWin = true
 
 -- ============================================================================
--- UI TABS
+-- THE "ANTI-BENGONG" ENGINE
 -- ============================================================================
-local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Section({ Title = "Hybrid Farming" }):Toggle({
-    Title = "Auto Click & Farm",
-    Value = false,
-    Callback = function(v) _G.FarmingActive = v end
-})
+local function AutoCast()
+    local char = LocalPlayer.Character
+    local tool = char and char:FindFirstChildWhichIsA("Tool")
+    
+    -- 1. Cari tombol Cast di ScreenGui (Fishzar biasanya punya UI tombol di HP/PC)
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local CastBtn = PlayerGui:FindFirstChild("Cast", true) or PlayerGui:FindFirstChild("Fish", true) or PlayerGui:FindFirstChild("Throw", true)
 
-MainTab:Section({ Title = "Settings" }):Slider({
-    Title = "Click Interval (Detik)",
-    Step = 0.1,
-    Value = {Min = 0.5, Max = 5.0, Default = 1.0},
-    Callback = function(v) _G.ClickInterval = v end
-})
+    if CastBtn and CastBtn:IsA("GuiButton") and CastBtn.Visible then
+        -- Jika ada tombol di layar, kita klik tombolnya
+        local pos = CastBtn.AbsolutePosition
+        local size = CastBtn.AbsoluteSize
+        VIM:SendMouseButtonEvent(pos.X + (size.X/2), pos.Y + (size.Y/2) + 50, 0, true, game, 1)
+        task.wait(0.1)
+        VIM:SendMouseButtonEvent(pos.X + (size.X/2), pos.Y + (size.Y/2) + 50, 0, false, game, 1)
+    else
+        -- Jika tidak ada tombol, gunakan simulasi klik tengah layar (Tahan 1 detik untuk Power)
+        local viewportSize = workspace.CurrentCamera.ViewportSize
+        local centerX, centerY = viewportSize.X / 2, viewportSize.Y / 2
+        
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
+        task.wait(1.1) -- Tahan untuk power pancingan
+        VIM:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
+    end
+end
 
 -- ============================================================================
--- THE HYBRID LOOP (Click + Remote Spoof)
+-- THE INSTANT WIN ENGINE (Mencari UI Minigame)
 -- ============================================================================
 task.spawn(function()
     while true do
-        task.wait(_G.ClickInterval)
-        if _G.FarmingActive then
+        task.wait(0.1)
+        if _G.FarmingActive and _G.InstantWin then
             pcall(function()
-                local char = LocalPlayer.Character
-                local tool = char and char:FindFirstChildWhichIsA("Tool")
+                local PlayerGui = LocalPlayer.PlayerGui
+                -- Cari UI Minigame Fishzar (biasanya namanya Minigame atau FishingUI)
+                local MiniGameUI = PlayerGui:FindFirstChild("Minigame", true) or PlayerGui:FindFirstChild("Fishing", true)
                 
-                -- 1. Pastikan Pancingan dipegang
-                if not tool then
-                    local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
-                    if rod then char.Humanoid:EquipTool(rod) end
-                end
-                
-                -- 2. SIMULASI KLIK (Kunci biar gak bengong)
-                -- Klik di tengah layar
-                VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1) -- Press
-                task.wait(0.1)
-                VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1) -- Release
-                
-                -- 3. REMOTE SPOOF (Biar nariknya INSTANT)
-                -- Kita cari remote WinMinigame di folder FishingSystem secara agresif
-                local FSystem = ReplicatedStorage:FindFirstChild("FishingSystem")
-                if FSystem and _G.InstantBypass then
-                    local win = FSystem:FindFirstChild("WinMinigame") or FSystem:FindFirstChild("MinigameFinish")
-                    local give = FSystem:FindFirstChild("FishGiver") or FSystem:FindFirstChild("Catch")
-                    
-                    if win then
-                        win:FireServer(true) -- Kirim sinyal menang
-                        task.wait(0.1)
-                        if give then give:FireServer() end -- Langsung minta ikan
+                if MiniGameUI and MiniGameUI.Enabled == true then
+                    -- Tembak Remote Menang secara Agresif saat UI muncul
+                    local FishingSystem = game:GetService("ReplicatedStorage"):FindFirstChild("FishingSystem")
+                    if FishingSystem then
+                        local win = FishingSystem:FindFirstChild("WinMinigame") or FishingSystem:FindFirstChild("MinigameFinish")
+                        if win then
+                            win:FireServer(true)
+                            task.wait(0.5)
+                            local give = FishingSystem:FindFirstChild("FishGiver")
+                            if give then give:FireServer() end
+                        end
                     end
                 end
             end)
@@ -84,4 +83,45 @@ task.spawn(function()
     end
 end)
 
-WindUI:Notify({ Title = "Hybrid v10", Content = "Clicker & Spoof Active!", Duration = 3 })
+-- ============================================================================
+-- MAIN TAB
+-- ============================================================================
+local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
+MainTab:Section({ Title = "Fishzar God Mode" }):Toggle({
+    Title = "Ultimate Auto Farm",
+    Value = false,
+    Callback = function(v) _G.FarmingActive = v end
+})
+
+-- ============================================================================
+-- LOOP UTAMA
+-- ============================================================================
+task.spawn(function()
+    while true do
+        task.wait(2) -- Jeda antar lemparan
+        if _G.FarmingActive then
+            -- Pastikan pancingan siap
+            local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            if not tool then
+                local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+                if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
+            end
+            
+            -- Cek apakah sedang memancing (melihat ada kail di workspace)
+            local hasHook = false
+            for _, v in pairs(workspace:GetChildren()) do
+                if (v.Name:find("Hook") or v.Name:find("Bobber")) and v:FindFirstChild("Owner") and v.Owner.Value == LocalPlayer.Name then
+                    hasHook = true
+                    break
+                end
+            end
+            
+            if not hasHook then
+                AutoCast()
+                task.wait(3) -- Tunggu kail meluncur
+            end
+        end
+    end
+end)
+
+WindUI:Notify({ Title = "Atomic v11", Content = "Final Bypass Loaded!", Duration = 5 })
