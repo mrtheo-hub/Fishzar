@@ -1,4 +1,4 @@
--- [[ DapzX Atomic - Version 4.0 (Universal Auto-Detect) ]] --
+-- [[ DapzX Atomic - Version 5.0 (FISHZAR SPECIAL) ]] --
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -10,49 +10,49 @@ local LocalPlayer = Players.LocalPlayer
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ============================================================================
--- AUTO-DETECTION SYSTEM (Mencari Remote yang Benar)
+-- FISHZAR REMOTE PATHWAY
 -- ============================================================================
-local FSystem = ReplicatedStorage:FindFirstChild("FishingSystem") or ReplicatedStorage:FindFirstChild("Events") or ReplicatedStorage:FindFirstChild("Remotes")
-
--- Cari Remote spesifik berdasarkan fungsinya
-local CastRemote = FSystem and (FSystem:FindFirstChild("Cast") or FSystem:FindFirstChild("CastReplication") or FSystem:FindFirstChild("Throw"))
-local CatchRemote = FSystem and (FSystem:FindFirstChild("FishGiver") or FSystem:FindFirstChild("Catch") or FSystem:FindFirstChild("ClaimFish"))
-local SellRemote = FSystem and (FSystem:FindFirstChild("SellFish") or FSystem:FindFirstChild("SellAll"))
+-- Di Fishzar, Remote biasanya ada di ReplicatedStorage.FishingSystem
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
+local CastEvent = FishingSystem:WaitForChild("CastLine")      -- Nama Remote Cast di Fishzar
+local CatchEvent = FishingSystem:WaitForChild("FishGiver")    -- Nama Remote Catch
+local MinigameEvent = FishingSystem:WaitForChild("WinMinigame") -- Nama Remote Bypass
 
 -- ============================================================================
 -- CONFIG
 -- ============================================================================
 _G.FarmingActive = false
-_G.CatchDelay = 1.0
+_G.CatchDelay = 0.5 
+_G.AutoSellActive = false
 
 -- ============================================================================
 -- UI SETUP
 -- ============================================================================
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v4.0 Detect",
+    Title = "DapzX Atomic | Fishzar Edition",
     Author = "by DapzX",
-    Folder = "dapzxatomic",
-    Icon = "solar:atom-bold",
+    Folder = "fishzar_atomic",
+    Icon = "solar:fish-bold",
     Size = UDim2.fromOffset(580, 460),
     OpenButton = { Enabled = true, Draggable = true }
 })
 
 local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Section({ Title = "Farming" }):Toggle({
+MainTab:Section({ Title = "Fishzar Farming" }):Toggle({
     Title = "Auto Farm",
     Value = false,
     Callback = function(v) _G.FarmingActive = v end
 })
 
 MainTab:Section({ Title = "Settings" }):Slider({
-    Title = "Instant Delay",
+    Title = "Instant Speed",
     Step = 0.1,
-    Value = {Min = 0.1, Max = 5.0, Default = 1.0},
+    Value = {Min = 0.1, Max = 3.0, Default = 0.5},
     Callback = function(v) _G.CatchDelay = v end
 })
 
 -- ============================================================================
--- THE SMART LOOP
+-- THE FISHZAR LOOP
 -- ============================================================================
 task.spawn(function()
     while true do
@@ -60,50 +60,56 @@ task.spawn(function()
         if _G.FarmingActive then
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
-            local tool = char and char:FindFirstChildWhichIsA("Tool")
+            local rod = char and char:FindFirstChildWhichIsA("Tool")
             
-            if root and tool and CastRemote then
-                -- 1. LEMPAR (Coba berbagai format argument)
-                local castPos = root.Position + (root.CFrame.LookVector * 20)
+            if root and rod then
                 pcall(function()
-                    CastRemote:FireServer(castPos, root.Position, tool.Name, 100)
+                    -- 1. LEMPAR (Fishzar butuh CFrame atau Vector3)
+                    local castPos = root.Position + (root.CFrame.LookVector * 20)
+                    CastEvent:FireServer(castPos) 
+                    
+                    -- 2. TUNGGU IKAN GIGIT
+                    task.wait(1.5) 
+                    
+                    -- 3. BYPASS MINIGAME (SPOOF WIN)
+                    -- Di Fishzar, mengirim sinyal win akan membuat server siap memberi hadiah
+                    MinigameEvent:FireServer(true) 
+                    
+                    -- 4. JEDA INSTANT
+                    task.wait(_G.CatchDelay)
+                    
+                    -- 5. CLAIM IKAN
+                    CatchEvent:FireServer()
+                    
+                    -- 6. CLEANUP
+                    local cleanup = FishingSystem:FindFirstChild("StopFishing") or FishingSystem:FindFirstChild("Cleanup")
+                    if cleanup then cleanup:FireServer() end
                 end)
                 
-                -- 2. TUNGGU (Server butuh waktu proses kail)
-                task.wait(1.5) 
-                
-                -- 3. BYPASS MINIGAME (Kirim sinyal menang jika ada)
-                local WinRemote = FSystem:FindFirstChild("MinigameFinish") or FSystem:FindFirstChild("Results")
-                if WinRemote then
-                    pcall(function() WinRemote:FireServer(true, 100) end)
-                end
-                
-                -- 4. JEDA SESUAI SLIDER
-                task.wait(_G.CatchDelay)
-                
-                -- 5. AMBIL IKAN
-                if CatchRemote then
-                    pcall(function()
-                        CatchRemote:FireServer({ ["hookPosition"] = castPos })
-                    end)
-                end
-                
-                -- 6. BERSIHKAN
-                local CleanRemote = FSystem:FindFirstChild("CleanupCast") or FSystem:FindFirstChild("Reset")
-                if CleanRemote then
-                    pcall(function() CleanRemote:FireServer() end)
-                end
-                
-                task.wait(0.5)
+                task.wait(0.5) -- Jeda antar tarikan
             else
-                -- Notifikasi jika Remote tidak ketemu
-                if _G.FarmingActive and not CastRemote then
-                    WindUI:Notify({Title = "Error", Content = "Remote Fishing tidak ditemukan!", Duration = 2})
-                    _G.FarmingActive = false
+                -- Jika tidak pegang pancingan
+                if _G.FarmingActive and not rod then
+                    WindUI:Notify({Title = "Peringatan", Content = "Pegang pancingan di tangan!", Duration = 2})
+                    task.wait(2)
                 end
             end
         end
     end
 end)
 
-WindUI:Notify({ Title = "Atomic v4.0", Content = "Auto-Detection Loaded!", Duration = 3 })
+-- AUTO SELL (Fishzar Version)
+task.spawn(function()
+    while true do
+        task.wait(10)
+        if _G.AutoSellActive then
+            local sellPart = workspace:FindFirstChild("SellPart") -- Lokasi jual di Fishzar
+            local sellEvent = FishingSystem:FindFirstChild("SellFish")
+            if sellEvent then
+                sellEvent:FireServer()
+            end
+        end
+    end
+end)
+
+WindUI:Notify({ Title = "Atomic v5.0", Content = "Fishzar Script Ready!", Duration = 3 })
