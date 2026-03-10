@@ -1,14 +1,11 @@
--- [[ DAPZX ATOMIC | FISHZAR V6.0.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V7.0.0 ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
+local VirtualUser = game:GetService("VirtualUser")
 
--- [[ 1. CONFIG ]]
-_G.Version = "v6.0.0"
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WalkOnWater = false
@@ -17,189 +14,102 @@ _G.AntiDrown = false
 _G.AutoEquip = false
 _G.StreamerMode = false
 _G.AntiStaff = false
-_G.WebhookURL = ""
-_G.SettingsDelay = 3.0 -- Default 3 detik
+_G.SettingsDelay = 3.0
 _G.FilterRarity = {["Common"]=true,["Uncommon"]=true,["Rare"]=true,["Epic"]=true,["Legendary"]=true,["Secret"]=true}
 
--- [[ 2. UTILITY & SECURITY LOGIC ]]
-local function SendWebhook(item)
-    if not _G.WebhookURL or _G.WebhookURL == "" then return end
-    local rarity = item:GetAttribute("rarity") or (item:FindFirstChild("Stats") and item.Stats:FindFirstChild("Rarity") and item.Stats.Rarity.Value) or "Unknown"
-    if not _G.FilterRarity[tostring(rarity)] then return end
-
-    local payload = {
-        ["embeds"] = {{
-            ["title"] = "🎣 Ikan Tertangkap!",
-            ["color"] = 3447003,
-            ["fields"] = {
-                {["name"] = "Nama", ["value"] = tostring(item:GetAttribute("fishId") or item.Name), ["inline"] = true},
-                {["name"] = "Rarity", ["value"] = tostring(rarity), ["inline"] = true}
-            },
-            ["footer"] = {["text"] = "DapzX Atomic | " .. os.date("%X")}
-        }}
-    }
-    pcall(function() (http_request or request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)}) end)
-end
-
--- Webhook & Auto-Equip Watcher
-LocalPlayer.Backpack.ChildAdded:Connect(function(item)
-    if item:IsA("Tool") then 
-        task.wait(0.5)
-        SendWebhook(item) 
-    end
-end)
-
+-- [[ 1. SECURITY & UTILITIES ]]
 -- Anti-AFK
-LocalPlayer.Idled:Connect(function()
-    if _G.AntiAFK then
-        game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    end
-end)
+LocalPlayer.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
 
 -- Anti-Staff
-Players.PlayerAdded:Connect(function(player)
-    if _G.AntiStaff and (player:GetRankInGroup(game.CreatorId) > 0 or player.Name:lower():find("admin") or player.Name:lower():find("staff")) then
-        LocalPlayer:Kick("⚠️ Staff Detected: " .. player.Name)
-    end
+Players.PlayerAdded:Connect(function(p) 
+    if _G.AntiStaff and (p:GetRankInGroup(game.CreatorId) > 0 or p.Name:lower():find("admin")) then LocalPlayer:Kick("Staff Detected!") end 
 end)
 
--- Streamer Mode (Name & Avatar)
-task.spawn(function()
-    while task.wait(1) do
-        if _G.StreamerMode and LocalPlayer.Character then
-            pcall(function()
-                local head = LocalPlayer.Character:FindFirstChild("Head")
-                if head and head:FindFirstChild("Nametag") then head.Nametag.Enabled = false end
-                -- Avatar Change (Visual Only for local)
-                if LocalPlayer.Character:FindFirstChild("HumanoidDescription") then
-                    local desc = Instance.new("HumanoidDescription")
-                    desc.Head = 2968530187 -- Target ID
-                    LocalPlayer.Character.Humanoid:ApplyDescription(desc)
-                end
-            end)
-        end
-    end
-end)
+-- [[ 2. WEBHOOK & FISH MONITOR ]]
+local function SendWebhook(item)
+    if not _G.WebhookURL or _G.WebhookURL == "" then return end
+    local r = item:GetAttribute("rarity") or "Unknown"
+    if not _G.FilterRarity[tostring(r)] then return end
+    local p = {["embeds"]={{["title"]="🎣 Ikan!", ["fields"]={{["name"]="Nama",["value"]=item.Name}, {["name"]="Rarity",["value"]=tostring(r)}}}}}
+    pcall(function() (http_request or request)({Url=_G.WebhookURL, Method="POST", Headers={["Content-Type"]="application/json"}, Body=HttpService:JSONEncode(p)}) end)
+end
 
--- [[ 3. UI WINDOW ]]
+LocalPlayer.Backpack.ChildAdded:Connect(function(i) if i:IsA("Tool") then task.wait(0.5); SendWebhook(i) end end)
+
+-- [[ 3. UI GENERATION ]]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
+local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar V7", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
 
--- TAB: MAIN
+-- TAB MAIN (COPYRIGHT)
 local MainTab = Window:Tab({Title = "Main", Icon = "solar:home-smile-bold"})
-MainTab:Section({Title = "Copyright & Info"})
-MainTab:Section({Title = "Made by DapzX Team\nDiscord: https://discord.gg/getsades", TextSize = 14})
+MainTab:Section({Title = "DapzX Atomic System"})
+MainTab:Button({Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/getsades") end})
 
--- TAB: PLAYER (GANTI NAMA)
+-- TAB PLAYER
 local PlayerTab = Window:Tab({Title = "Player", Icon = "solar:user-bold"})
-PlayerTab:Section({Title = "Character Improvements"})
 PlayerTab:Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
 PlayerTab:Toggle({Title = "Anti AFK", Callback = function(s) _G.AntiAFK = s end})
-PlayerTab:Toggle({Title = "Anti Drown", Callback = function(s) _G.AntiDrown = s end})
+PlayerTab:Toggle({Title = "Anti Drown (Infinite Oxygen)", Callback = function(s) _G.AntiDrown = s end})
 PlayerTab:Toggle({Title = "Auto Equip Rod", Callback = function(s) _G.AutoEquip = s end})
 
--- TAB: FISHING
+-- TAB FISHING
 local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
-FTab:Section({Title = "Automation"})
 FTab:Toggle({Title = "Auto Farm", Callback = function(s) _G.FarmingActive = s end})
-FTab:Input({Title = "Settings Delay (Detik)", Placeholder = "Contoh: 3.5", Callback = function(v) _G.SettingsDelay = tonumber(v) or 3 end})
+FTab:Input({Title = "Settings Delay", Placeholder = "3.0", Callback = function(v) _G.SettingsDelay = tonumber(v) or 3 end})
 
--- TAB: SHOP & TELEPORT (Sama seperti sebelumnya)
-local STab = Window:Tab({Title = "Shop", Icon = "solar:bag-bold"})
-STab:Toggle({Title = "Auto Sell", Callback = function(s) _G.AutoSellActive = s end})
-
+-- TAB TELEPORT
 local TTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
+local Islands = {["Nelayan"] = Vector3.new(-34, 14, 256), ["Aquarist"] = Vector3.new(-2032, 13, -833), ["Crystaliz"] = Vector3.new(203, 13, -2614), ["Megalodon"] = Vector3.new(3125, 9, -1713)}
+for n, p in pairs(Islands) do TTab:Button({Title = n, Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(p) end end}) end
 
--- TAB: UTILITIES (SECURITY & OTHERS)
+-- TAB UTILITIES
 local UTab = Window:Tab({Title = "Utilities", Icon = "solar:shield-keyhole-bold"})
-local SecSec = UTab:Section({Title = "Security"})
-SecSec:Toggle({Title = "Streamer Mode (Visual Only)", Callback = function(s) _G.StreamerMode = s end})
-SecSec:Toggle({Title = "Anti Staff (Auto Kick)", Callback = function(s) _G.AntiStaff = s end})
+UTab:Toggle({Title = "Streamer Mode", Callback = function(s) _G.StreamerMode = s end})
+UTab:Toggle({Title = "Anti Staff", Callback = function(s) _G.AntiStaff = s end})
+local PingLabel = UTab:Section({Title = "Ping: ..."})
+local FPSLabel = UTab:Section({Title = "FPS: ..."})
 
-local OthSec = UTab:Section({Title = "Others (Real Time Stats)"})
-local PingLabel = OthSec:Section({Title = "Ping: 0ms"})
-local FPSLabel = OthSec:Section({Title = "FPS: 0"})
-
--- TAB: PERFORMANCE (FPS BOOSTER)
+-- TAB PERFORMANCE
 local PTab = Window:Tab({Title = "Performance", Icon = "solar:bolt-bold"})
-PTab:Button({Title = "FPS Booster", Callback = function()
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("Part") or v:IsA("UnionOperation") or v:IsA("MeshPart") then
-            v.Material = Enum.Material.SmoothPlastic
-            v.Reflectance = 0
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            v:Destroy()
-        end
-    end
-    WindUI:Notify({Title = "Performance", Content = "FPS Boosted! Visuals simplified."})
-end})
+PTab:Button({Title = "FPS Booster", Callback = function() for _,v in pairs(workspace:GetDescendants()) do if v:IsA("Decal") then v:Destroy() end end end})
 
--- TAB: INTEGRATION (WEBHOOK)
-local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-ITab:Input({Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end})
-
--- [[ 4. LOOPS ]]
-
--- Real Time Stats Loop
+-- [[ 4. LOOPS (STABLE) ]]
+-- Stats Loop
 task.spawn(function()
     while task.wait(1) do
-        local ping = tonumber(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString():match("%d+"))
+        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()
         local fps = math.floor(workspace:GetRealTimePhysicsFPS())
-        PingLabel:SetTitle("Ping: " .. ping .. "ms")
+        PingLabel:SetTitle("Ping: " .. ping)
         FPSLabel:SetTitle("FPS: " .. fps)
     end
 end)
 
--- Auto Equip Loop
-task.spawn(function()
-    while task.wait(1) do
-        if _G.AutoEquip and LocalPlayer.Character and not LocalPlayer.Character:FindFirstChildWhichIsA("Tool") then
-            local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
-            if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
-        end
+-- Walk on Water (Fixed)
+RunService.RenderStepped:Connect(function()
+    if _G.WalkOnWater and LocalPlayer.Character then
+        local pos = LocalPlayer.Character.HumanoidRootPart.Position
+        if pos.Y < 5 then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos.X, 5.5, pos.Z) end
+    end
+    if _G.AntiDrown and LocalPlayer.Character then
+        LocalPlayer.Character:FindFirstChild("Humanoid"):SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        LocalPlayer.Character:FindFirstChild("Humanoid").Oxygen = 100 
+    end
+    if _G.StreamerMode and LocalPlayer.Character then
+        local head = LocalPlayer.Character:FindFirstChild("Head")
+        if head and head:FindFirstChild("Nametag") then head.Nametag.Enabled = false end
     end
 end)
 
--- Anti Drown Loop
+-- Auto Equip (Fixed)
 task.spawn(function()
-    while task.wait(0.1) do
-        if _G.AntiDrown and LocalPlayer.Character then
-            if LocalPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.Swimming then
-                LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0, 50, 0)
+    while task.wait(2) do
+        if _G.AutoEquip and LocalPlayer.Character then
+            local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+            if not tool then
+                local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+                if rod then LocalPlayer.Character.Humanoid:EquipTool(rod) end
             end
-        end
-    end
-end)
-
--- FISHING LOOP (METODE PRO)
-task.spawn(function()
-    local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
-    while true do
-        task.wait(0.5)
-        if _G.FarmingActive and LocalPlayer.Character then
-            pcall(function()
-                local char = LocalPlayer.Character
-                local root = char.HumanoidRootPart
-                local tool = char:FindFirstChildWhichIsA("Tool")
-                
-                if tool then
-                    local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                    task.wait(1.5)
-                    FishingSystem.PrecalcFish:InvokeServer()
-                    task.wait(0.5)
-                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-                    
-                    task.wait(_G.SettingsDelay) -- Menggunakan input box
-                    
-                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    task.wait(0.3)
-                    FishingSystem.CleanupCast:FireServer()
-                    task.wait(1.5)
-                end
-            end)
         end
     end
 end)
