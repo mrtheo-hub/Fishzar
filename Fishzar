@@ -10,14 +10,19 @@ local VirtualUser = game:GetService("VirtualUser")
 local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
 -- ============================================================================
--- WINDUI LOADER
+-- WINDUI LOADER (FIXED)
 -- ============================================================================
 local WindUI
-local success_ui, ui_err = pcall(function()
+local success_ui, result = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 end)
-if not success_ui then return warn("Gagal memuat UI: " .. tostring(ui_err)) end
 
+if success_ui and result then
+    WindUI = result
+else
+    warn("Gagal memuat UI: " .. tostring(result))
+    return
+end
 -- ============================================================================
 -- GLOBAL CONFIG & ANTI-AFK
 -- ============================================================================
