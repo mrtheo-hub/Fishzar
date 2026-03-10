@@ -1,30 +1,108 @@
--- [[ DAPZX ATOMIC | FISHZAR V14.0.0 - FINAL UI UPDATE ]]
+-- [[ DAPZX ATOMIC | FISHZAR V14.0.0 - FINAL STABLE BUILD ]]
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Stats = game:GetService("Stats")
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
+local AnimController = require(FishingSystem.FishingModules:WaitForChild("AnimationController"))
 
--- ... (kode sebelumnya tetap sama)
+-- GLOBAL CONFIG
+_G.Config = {Farming = false, Delay = 3, WalkWater = false, AntiDrown = false, Streamer = false, AntiStaff = false, AutoEquip = false, AutoSell = false}
 
--- TAB: MAIN (UPDATED DENGAN CHANGELOG)
+-- [[ 1. UI SETUP ]]
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar v14", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
+
+-- TAB: MAIN (CHANGELOG)
 local MainTab = Window:Tab({Title = "Main", Icon = "solar:home-smile-bold"})
-
 MainTab:Section({Title = "DapzX Atomic System © 2026"})
 MainTab:Button({Title = "Copy Official Discord", Callback = function() setclipboard("https://discord.gg/getsades") end})
-
 MainTab:Section({Title = "📢 Changelog v14.0.0"})
-MainTab:Section({
-    Title = "• Modular Architecture (Fitur berjalan mandiri)\n" ..
-            "• Performance Boost (Ping/FPS fix)\n" ..
-            "• Fixed Streamer Mode (No lag)\n" ..
-            "• Anti-Drown 2.0 (Natural movement)\n" ..
-            "• Fixed Fishing & Integration stability\n" ..
-            "• Penambahan modul Anti-Staff",
-    TextSize = 12
-})
+MainTab:Section({Title = "• Modular Arch: Fitur berjalan mandiri\n• Performance Boost: Ping/FPS fix\n• Fixed Streamer Mode: No lag\n• Anti-Drown 2.0: Natural movement\n• Penambahan modul Anti-Staff", TextSize = 12})
 
-MainTab:Section({Title = "⚠️ Catatan Penting"})
-MainTab:Section({
-    Title = "Gunakan FPS Booster jika merasa lag. Pastikan\n" ..
-            "koneksi stabil agar Ping/FPS update secara real-time.\n" ..
-            "DapzX Team - Farming made easy.",
-    TextSize = 12
-})
+-- TAB: PLAYER
+local PlayerTab = Window:Tab({Title = "Player", Icon = "solar:user-bold"})
+PlayerTab:Toggle({Title = "Walk on Water", Callback = function(s) _G.Config.WalkWater = s end})
+PlayerTab:Toggle({Title = "Anti Drown", Callback = function(s) _G.Config.AntiDrown = s end})
+PlayerTab:Toggle({Title = "Auto Equip Rod", Callback = function(s) _G.Config.AutoEquip = s end})
 
--- ... (lanjutkan dengan tab lainnya)
+-- TAB: FISHING
+local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
+FTab:Toggle({Title = "Auto Farm", Callback = function(s) _G.Config.Farming = s end})
+FTab:Input({Title = "Settings Delay (Detik)", Placeholder = "3.0", Callback = function(v) _G.Config.Delay = tonumber(v) or 3 end})
+
+-- TAB: SHOP & TELEPORT
+local ShopTab = Window:Tab({Title = "Shop", Icon = "solar:bag-bold"})
+ShopTab:Toggle({Title = "Auto Sell", Callback = function(s) _G.Config.AutoSell = s end})
+local TTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
+local Islands = {["Nelayan"]=Vector3.new(-34,14,256), ["Aquarist"]=Vector3.new(-2032,13,-833), ["Crystaliz"]=Vector3.new(203,13,-2614), ["Megalodon"]=Vector3.new(3125,9,-1713)}
+for n,p in pairs(Islands) do TTab:Button({Title=n, Callback=function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(p) end end}) end
+
+-- TAB: UTILITIES & PERFORMANCE
+local UTab = Window:Tab({Title = "Utilities", Icon = "solar:shield-keyhole-bold"})
+UTab:Toggle({Title = "Streamer Mode", Callback = function(s) _G.Config.Streamer = s end})
+UTab:Toggle({Title = "Anti Staff", Callback = function(s) _G.Config.AntiStaff = s end})
+local PingL = UTab:Section({Title = "Ping: 0ms"})
+local FPSL = UTab:Section({Title = "FPS: 0"})
+
+local PTab = Window:Tab({Title = "Performance", Icon = "solar:bolt-bold"})
+PTab:Button({Title = "FPS Booster (Clear Decals)", Callback = function() for _,v in pairs(workspace:GetDescendants()) do if v:IsA("Decal") then v:Destroy() end end end})
+
+-- TAB: INTEGRATION
+local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+ITab:Input({Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end})
+
+-- [[ 2. LOOPS (MODULAR) ]]
+task.spawn(function()
+    while task.wait(0.5) do
+        -- Stats
+        PingL:SetTitle("Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms")
+        FPSL:SetTitle("FPS: " .. math.floor(workspace:GetRealTimePhysicsFPS()))
+        
+        -- Anti-Staff
+        if _G.Config.AntiStaff then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and (p.Name:lower():find("admin") or p.Name:lower():find("staff")) then LocalPlayer:Kick("Security: Staff Detected!") end
+            end
+        end
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    -- Walk on Water
+    if _G.Config.WalkWater and LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position.Y < 5 then
+        LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0, 5, 0)
+    end
+    -- Streamer Mode
+    if _G.Config.Streamer and LocalPlayer.Character then
+        local head = LocalPlayer.Character:FindFirstChild("Head")
+        if head then for _,v in pairs(head:GetChildren()) do if v:IsA("BillboardGui") then v.Enabled = false end end end
+    end
+    -- Anti Drown
+    if _G.Config.AntiDrown and LocalPlayer.Character then
+        LocalPlayer.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+    end
+end)
+
+-- FISHING LOOP (LOCKED METHOD)
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if _G.Config.Farming and LocalPlayer.Character then
+            pcall(function()
+                local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+                if tool then
+                    local castPos = LocalPlayer.Character.HumanoidRootPart.Position + (LocalPlayer.Character.HumanoidRootPart.CFrame.LookVector * 15)
+                    AnimController:Play("PrepareCast", 0.1)
+                    FishingSystem.CastReplication:FireServer(castPos, LocalPlayer.Character.HumanoidRootPart.Position, tool.Name, 99.5)
+                    task.wait(1.5); FishingSystem.PrecalcFish:InvokeServer(); task.wait(0.5)
+                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+                    task.wait(_G.Config.Delay)
+                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
+                    task.wait(1.5); FishingSystem.CleanupCast:FireServer()
+                end
+            end)
+        end
+    end
+end)
