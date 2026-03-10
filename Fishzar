@@ -1,8 +1,9 @@
--- [[ DapzX Atomic - Version 9.0 (DEEP SCAN) ]] --
+-- [[ DapzX Atomic - Version 10.0 (Hybrid Clicker) ]] --
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local VIM = game:GetService("VirtualInputManager") -- Simulasi Input
 
 -- ============================================================================
 -- UI LOADER
@@ -10,109 +11,77 @@ local LocalPlayer = Players.LocalPlayer
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v9 Deep Scan",
+    Title = "DapzX Atomic | v10 Hybrid",
     Author = "by DapzX",
-    Folder = "fishzar_v9",
-    Icon = "solar:shield-warning-bold",
+    Folder = "fishzar_v10",
+    Icon = "solar:mouse-bold",
     Size = UDim2.fromOffset(580, 460),
     OpenButton = { Enabled = true, Draggable = true }
 })
 
 -- ============================================================================
--- PREDATOR SCANNER (Mencari Remote di Seluruh Game)
--- ============================================================================
-local FoundCast, FoundCatch, FoundWin
-
-local function DeepScan()
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            local n = v.Name:lower()
-            if n:find("cast") or n:find("throw") or n:find("line") then
-                FoundCast = v
-            elseif n:find("giver") or n:find("claim") or n:find("catch") then
-                FoundCatch = v
-            elseif n:find("win") or n:find("finish") or n:find("result") then
-                FoundWin = v
-            end
-        end
-    end
-end
-
-DeepScan() -- Jalankan scan saat script dimulai
-
--- ============================================================================
 -- CONFIG
 -- ============================================================================
 _G.FarmingActive = false
-_G.CatchDelay = 1.5
+_G.ClickInterval = 1.0 -- Jeda antar klik
+_G.InstantBypass = true -- Tetap coba tembak remote Win
 
 -- ============================================================================
 -- UI TABS
 -- ============================================================================
 local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Section({ Title = "Universal Farming" }):Toggle({
-    Title = "Force Auto Farm",
+MainTab:Section({ Title = "Hybrid Farming" }):Toggle({
+    Title = "Auto Click & Farm",
     Value = false,
     Callback = function(v) _G.FarmingActive = v end
 })
 
-MainTab:Section({ Title = "Status" }):Button({
-    Title = "Re-Scan Remotes",
-    Callback = function() 
-        DeepScan() 
-        WindUI:Notify({Title = "Scanner", Content = "Remotes Updated!", Duration = 2})
-    end
+MainTab:Section({ Title = "Settings" }):Slider({
+    Title = "Click Interval (Detik)",
+    Step = 0.1,
+    Value = {Min = 0.5, Max = 5.0, Default = 1.0},
+    Callback = function(v) _G.ClickInterval = v end
 })
 
 -- ============================================================================
--- THE FORCE LOOP
+-- THE HYBRID LOOP (Click + Remote Spoof)
 -- ============================================================================
 task.spawn(function()
     while true do
-        task.wait(0.7)
+        task.wait(_G.ClickInterval)
         if _G.FarmingActive then
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            local tool = char and char:FindFirstChildWhichIsA("Tool")
-
-            if root and tool and FoundCast then
-                pcall(function()
-                    local castPos = root.Position + (root.CFrame.LookVector * 25)
+            pcall(function()
+                local char = LocalPlayer.Character
+                local tool = char and char:FindFirstChildWhichIsA("Tool")
+                
+                -- 1. Pastikan Pancingan dipegang
+                if not tool then
+                    local rod = LocalPlayer.Backpack:FindFirstChildWhichIsA("Tool")
+                    if rod then char.Humanoid:EquipTool(rod) end
+                end
+                
+                -- 2. SIMULASI KLIK (Kunci biar gak bengong)
+                -- Klik di tengah layar
+                VIM:SendMouseButtonEvent(500, 500, 0, true, game, 1) -- Press
+                task.wait(0.1)
+                VIM:SendMouseButtonEvent(500, 500, 0, false, game, 1) -- Release
+                
+                -- 3. REMOTE SPOOF (Biar nariknya INSTANT)
+                -- Kita cari remote WinMinigame di folder FishingSystem secara agresif
+                local FSystem = ReplicatedStorage:FindFirstChild("FishingSystem")
+                if FSystem and _G.InstantBypass then
+                    local win = FSystem:FindFirstChild("WinMinigame") or FSystem:FindFirstChild("MinigameFinish")
+                    local give = FSystem:FindFirstChild("FishGiver") or FSystem:FindFirstChild("Catch")
                     
-                    -- Tembak Lemparan (Mencoba 2 metode sekaligus)
-                    if FoundCast:IsA("RemoteFunction") then
-                        FoundCast:InvokeServer(castPos)
-                    else
-                        FoundCast:FireServer(castPos, root.Position, tool.Name)
+                    if win then
+                        win:FireServer(true) -- Kirim sinyal menang
+                        task.wait(0.1)
+                        if give then give:FireServer() end -- Langsung minta ikan
                     end
-                    
-                    task.wait(1.5) -- Tunggu ikan
-                    
-                    -- Tembak Menang
-                    if FoundWin then
-                        if FoundWin:IsA("RemoteFunction") then
-                            FoundWin:InvokeServer(true, 100)
-                        else
-                            FoundWin:FireServer(true, 100)
-                        end
-                    end
-                    
-                    task.wait(_G.CatchDelay)
-                    
-                    -- Tembak Ambil Ikan
-                    if FoundCatch then
-                        if FoundCatch:IsA("RemoteFunction") then
-                            FoundCatch:InvokeServer({["hookPosition"] = castPos})
-                        else
-                            FoundCatch:FireServer({["hookPosition"] = castPos})
-                        end
-                    end
-                end)
-            elseif _G.FarmingActive and not FoundCast then
-                WindUI:Notify({Title = "Warning", Content = "Remote tidak ditemukan sama sekali!", Duration = 1})
-            end
+                end
+            end)
         end
     end
 end)
 
-WindUI:Notify({ Title = "V9 Online", Content = "Deep Scanner Active.", Duration = 3 })
+WindUI:Notify({ Title = "Hybrid v10", Content = "Clicker & Spoof Active!", Duration = 3 })
