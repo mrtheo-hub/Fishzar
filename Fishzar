@@ -1,153 +1,107 @@
--- [[ DAPZX ATOMIC | FISHZAR V3.2.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V3.3.0 (FIXED) ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
-local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
--- [[ 1. LOADING SCREEN ]]
-local function CreateLoadingScreen()
-    local Screen = Instance.new("ScreenGui", CoreGui)
-    local Frame = Instance.new("Frame", Screen)
-    Frame.Size = UDim2.new(1, 0, 1, 0)
-    Frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    local Logo = Instance.new("ImageLabel", Frame)
-    Logo.Image = "rbxassetid://88673887911141"
-    Logo.Size = UDim2.new(0, 150, 0, 150)
-    Logo.Position = UDim2.new(0.5, -75, 0.5, -75)
-    Logo.BackgroundTransparency = 1
-    task.wait(2)
-    TweenService:Create(Frame, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(Logo, TweenInfo.new(1), {ImageTransparency = 1}):Play()
-    task.wait(1)
-    Screen:Destroy()
-end
-CreateLoadingScreen()
-
--- [[ 2. LOAD UI ]]
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-
--- [[ 3. CONFIG & GLOBALS ]]
-_G.Version = "v3.2.0"
+-- [[ GLOBAL CONFIG ]]
 _G.FarmingActive = false
 _G.AutoSellActive = false
-_G.WalkOnWater = false
 _G.WebhookURL = ""
-_G.MinigameDelay = 3.0
-_G.FilterRarity = { ["Rare"] = false, ["Epic"] = false, ["Legendary"] = false, ["Secret"] = false }
-_G.SellBlacklist = { ["Rare"] = false, ["Epic"] = false, ["Legendary"] = false, ["Secret"] = false }
+_G.FilterRarity = { ["Common"] = false, ["Uncommon"] = false, ["Rare"] = false, ["Epic"] = false, ["Legendary"] = false, ["Secret"] = false }
 
--- [[ 4. UTILITIES ]]
-LocalPlayer.Idled:Connect(function() VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()) end)
-
-local WaterPlatform
-RunService.RenderStepped:Connect(function()
-    if _G.WalkOnWater then
-        if not WaterPlatform then
-            WaterPlatform = Instance.new("Part", workspace)
-            WaterPlatform.Anchored = true; WaterPlatform.Transparency = 1; WaterPlatform.CanCollide = true; WaterPlatform.Size = Vector3.new(500, 1, 500)
-        end
-        local pos = LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position
-        if pos then WaterPlatform.Position = Vector3.new(pos.X, 4.5, pos.Z) end
-    elseif WaterPlatform then WaterPlatform:Destroy(); WaterPlatform = nil end
-end)
-
+-- [[ FUNGSI WEBHOOK (FIXED LOGIC) ]]
 local function SendFishWebhook(data)
     if _G.WebhookURL == "" or not _G.FilterRarity[data.rarity] then return end
-    local payload = {embeds = {{
-        title = "🎣 Ikan Tertangkap!", color = 3447003,
-        fields = {
-            {name = "Nama Ikan", value = data.fishId, inline = true},
-            {name = "Rarity", value = data.rarity, inline = true},
-            {name = "Berat", value = data.weight .. " kg", inline = true},
-            {name = "Waktu", value = os.date("%H:%M:%S"), inline = true}
-        }, footer = {text = "DapzX Atomic System"}
-    }}}
-    pcall(function()
-        (http_request or request or syn.request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(payload)})
+    
+    local payload = {
+        ["embeds"] = {{
+            ["title"] = "🎣 Ikan Tertangkap!",
+            ["color"] = 3447003,
+            ["fields"] = {
+                {["name"] = "Nama", ["value"] = data.fishId, ["inline"] = true},
+                {["name"] = "Rarity", ["value"] = data.rarity, ["inline"] = true},
+                {["name"] = "Berat", ["value"] = tostring(data.weight) .. " kg", ["inline"] = true}
+            }
+        }}
+    }
+    
+    local success, response = pcall(function()
+        return (http_request or request or syn.request)({
+            Url = _G.WebhookURL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(payload)
+        })
     end)
+    
+    if not success then warn("Webhook Error: " .. tostring(response)) end
 end
 
--- [[ 5. UI INTERFACE ]]
-local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
-Window:Tag({Title = "Version: " .. _G.Version, Icon = "solar:shield-check-bold", Color = Color3.fromHex("#F48C06")})
-Window:Tag({Title = "Executor: " .. (identifyexecutor() or "Unknown"), Icon = "solar:cpu-bolt-bold", Color = Color3.fromHex("#06FFA5")})
+-- [[ UI ]]
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar v3.3", Icon = "solar:atom-bold", Size = UDim2.fromOffset(500, 400)})
 
-local PlayerTab = Window:Tab({Title = "Local Player", Icon = "solar:user-bold"})
-PlayerTab:Section({Title = "Movement"}):Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
+-- TAB: FISHING
+local FTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
+FTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
+FTab:Section({Title = "Auto Sell"}):Toggle({Title = "Auto Sell Semua Ikan", Callback = function(s) _G.AutoSellActive = s end})
 
-local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:cursor-square-bold"})
-FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
-FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Value = {Min = 0.5, Max = 5, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
-
-local SellTab = Window:Tab({Title = "Auto Sell", Icon = "solar:bag-bold"})
-SellTab:Section({Title = "System"}):Toggle({Title = "Enable Auto Sell", Callback = function(s) _G.AutoSellActive = s end})
-local BlacklistSec = SellTab:Section({Title = "Blacklist (Jangan Jual Rarity Ini)"})
-for _, r in pairs({"Rare", "Epic", "Legendary", "Secret"}) do
-    BlacklistSec:Toggle({Title = r, Callback = function(s) _G.SellBlacklist[r] = s end})
-end
-
-local TeleportTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
-for name, pos in pairs({["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Pulau Criystializ"] = Vector3.new(203, 13, -2614), ["Megalodon Zone"] = Vector3.new(3125, 9, -1713)}) do
-    TeleportTab:Section({Title = name}):Button({Title = "Teleport", Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end end})
-end
-
-local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-IntegrationTab:Section({Title = "Webhook URL"}):Input({Title = "URL", Callback = function(v) _G.WebhookURL = v end})
-local FilterSec = IntegrationTab:Section({Title = "Rarity Filter (Notif Discord)"})
-for _, r in pairs({"Rare", "Epic", "Legendary", "Secret"}) do
+-- TAB: INTEGRATION (WEBHOOK & FILTER)
+local ITab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
+ITab:Section({Title = "Webhook URL"}):Input({Title = "URL", Callback = function(v) _G.WebhookURL = v end})
+local FilterSec = ITab:Section({Title = "Filter Rarity (Notif)"})
+for _, r in pairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}) do
     FilterSec:Toggle({Title = r, Callback = function(s) _G.FilterRarity[r] = s end})
 end
 
--- [[ 6. LOOPS ]]
-task.spawn(function() -- Farming & Webhook Loop
+-- [[ MAIN LOOP (FIXED BENGONG) ]]
+task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
-    while true do
-        task.wait(1)
-        if _G.FarmingActive and LocalPlayer.Character then
+    while task.wait(1) do
+        if _G.FarmingActive then
             local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-            if not tool then
-                for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                    if item:IsA("Tool") and item:FindFirstChild("Handle") then LocalPlayer.Character.Humanoid:EquipTool(item); break end
-                end
-            end
-            tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-            if tool then
+            if tool and tool:FindFirstChild("Handle") then
                 local root = LocalPlayer.Character.HumanoidRootPart
                 local castPos = root.Position + (root.CFrame.LookVector * 15)
+                
+                -- Cast
                 FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                task.wait(2 + _G.MinigameDelay)
+                task.wait(3) -- Tunggu lempar
+                
+                -- Tarik
                 FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
-                task.wait(0.5)
+                task.wait(1)
+                
+                -- Cek Ikan & Webhook
                 for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
                     if item:IsA("Tool") and item:GetAttribute("rarity") then
-                        SendFishWebhook({fishId = item:GetAttribute("fishId") or item.Name, weight = item:GetAttribute("weight") or 0, rarity = item:GetAttribute("rarity")})
+                        SendFishWebhook({
+                            fishId = item:GetAttribute("fishId") or "Unknown",
+                            weight = item:GetAttribute("weight") or 0,
+                            rarity = item:GetAttribute("rarity")
+                        })
                     end
                 end
+                
                 FishingSystem.CleanupCast:FireServer()
-                task.wait(7)
             end
         end
     end
 end)
 
-task.spawn(function() -- Auto Sell Loop
-    while true do
-        task.wait(30)
+-- [[ AUTO SELL LOOP (SIMPLE) ]]
+task.spawn(function()
+    while task.wait(10) do
         if _G.AutoSellActive then
             local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
             if sellEvent then
-                local toSell = {}
+                local inv = {}
                 for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                    if item:IsA("Tool") then
-                        local rarity = item:GetAttribute("rarity") or "Common"
-                        if not _G.SellBlacklist[rarity] then table.insert(toSell, item) end
-                    end
+                    if item:IsA("Tool") then table.insert(inv, item) end
                 end
-                if #toSell > 0 then sellEvent:FireServer("SellAllBatch", toSell) end
+                if #inv > 0 then sellEvent:FireServer("SellAllBatch", inv) end
             end
         end
     end
