@@ -1,5 +1,5 @@
--- [[ DapzX Atomic - Version 2.5 ]] --
--- Update: Anti-AFK & Multi-Catch Experimental Method
+-- [[ DapzX Atomic - Version 3.0 ]] --
+-- Update: Instant Catch (Skip Minigame) & Anti-AFK
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,21 +15,16 @@ local cloneref = (cloneref or clonereference or function(instance) return instan
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ============================================================================
--- GLOBAL CONFIG & ANTI-AFK
+-- GLOBAL CONFIG
 -- ============================================================================
-local ScriptName = "DapzXAtomicScript"
-local OldGui = game.CoreGui:FindFirstChild(ScriptName)
-if OldGui then OldGui:Destroy() end
-
 _G.FarmingActive = false
+_G.InstantCatch = true -- Fitur Utama: Langsung Tarik
 _G.ScriptRunning = true
-_G.MinigameDelay = 3.0
 _G.AutoSellActive = false
 _G.AutoSellDelay = 1
-_G.MultiCatch = false -- Fitur Baru
-_G.AntiAFK = true     -- Default Aktif
+_G.AntiAFK = true
 
--- Logic Anti-AFK
+-- Anti-AFK Logic
 LocalPlayer.Idled:Connect(function()
     if _G.AntiAFK then
         VirtualUser:CaptureController()
@@ -63,17 +58,24 @@ local function SellAllBatch()
     local sellEvent = fishingSystem and fishingSystem:FindFirstChild("SellFish")
     if not sellEvent then return end
     local fishBatch = {}
-    local function scan(c) if c then for _, i in pairs(c:GetChildren()) do local d = GetFishData(i) if d then table.insert(fishBatch, d) end end end end
-    scan(LocalPlayer.Backpack)
-    scan(LocalPlayer.Character)
+    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+        local data = GetFishData(item)
+        if data then table.insert(fishBatch, data) end
+    end
+    if LocalPlayer.Character then
+        for _, item in pairs(LocalPlayer.Character:GetChildren()) do
+            local data = GetFishData(item)
+            if data then table.insert(fishBatch, data) end
+        end
+    end
     if #fishBatch > 0 then pcall(function() sellEvent:FireServer("SellAllBatch", fishBatch) end) end
 end
 
 -- ============================================================================
--- UI SETUP
+-- WINDOW CREATION
 -- ============================================================================
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | Fishzar v2.5",
+    Title = "DapzX Atomic | Fishzar v3.0",
     Author = "by DapzX",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
@@ -81,9 +83,8 @@ local Window = WindUI:CreateWindow({
     OpenButton = { Enabled = true, Draggable = true }
 })
 
--- TAB: FISHING
 local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
-local FishSection = FishingTab:Section({ Title = "Fishing Methods" })
+local FishSection = FishingTab:Section({ Title = "Auto Farm Controls" })
 
 FishSection:Toggle({
     Title = "Auto Farm",
@@ -92,42 +93,26 @@ FishSection:Toggle({
 })
 
 FishSection:Toggle({
-    Title = "Experimental Multi-Catch",
-    Desc = "Mencoba mendapatkan 2 ikan dalam 1 tarikan (High Risk)",
-    Value = false,
-    Callback = function(v) _G.MultiCatch = v end
-})
-
--- TAB: MISC (Anti-AFK & Teleport)
-local MiscTab = Window:Tab({ Title = "Misc", Icon = "solar:settings-bold" })
-MiscTab:Section({ Title = "Anti-AFK" }):Toggle({
-    Title = "Anti-Idle Kick",
+    Title = "Instant Catch (Skip Minigame)",
     Value = true,
-    Callback = function(v) _G.AntiAFK = v end
+    Callback = function(v) _G.InstantCatch = v end
+})
+
+local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:bag-check-bold" })
+ShopTab:Section({ Title = "Auto Sell" }):Toggle({
+    Title = "Enable Auto Sell",
+    Value = false,
+    Callback = function(v) _G.AutoSellActive = v end
 })
 
 -- ============================================================================
--- CORE LOOPS
+-- THE CORE: INSTANT FARMING LOOP
 -- ============================================================================
-
--- LOOP AUTO SELL
-local lastSell = tick()
-task.spawn(function()
-    while _G.ScriptRunning do
-        task.wait(2)
-        if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
-            SellAllBatch()
-            lastSell = tick()
-        end
-    end
-end)
-
--- LOOP AUTO FARM (METHOD UPDATE)
 local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 15)
 
 task.spawn(function()
     while _G.ScriptRunning do
-        task.wait(0.5)
+        task.wait(0.1) -- Fast Check
         if _G.FarmingActive and FishingSystem then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -138,34 +123,45 @@ task.spawn(function()
                     local rodName = tool.Name
                     local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
                     
-                    -- Step 1: Cast
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 99 + math.random())
-                    task.wait(1.2)
+                    -- 1. Lempar Kail
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 100)
                     
-                    -- Step 2: Pre-calculation
+                    -- 2. Tunggu sebentar agar server memproses kail di air
+                    task.wait(1.0) 
+                    
+                    -- 3. Trigger Ikan (Memaksa server menentukan ikan)
                     FishingSystem.PrecalcFish:InvokeServer()
-                    task.wait(0.5)
                     
-                    -- Step 3: Alert & Wait
-                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-                    task.wait(_G.MinigameDelay)
-                    
-                    -- Step 4: Method Multi-Catch (Double Fire)
-                    if _G.MultiCatch then
-                        -- Mengirim sinyal ambil ikan 2 kali sebelum Cleanup
-                        FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                        task.wait(0.05) -- Jeda sangat singkat
+                    -- 4. Instant Catch Logic (Skip Minigame Delay)
+                    if _G.InstantCatch then
+                        -- Tanpa nunggu PullAlert, langsung minta ikannya
+                        task.wait(0.2) -- Jeda kecil agar tidak terlihat mencurigakan oleh server
                         FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
                     else
+                        -- Cara normal (Pakai delay minigame)
+                        task.wait(2.5) 
                         FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
                     end
                     
-                    task.wait(0.3)
+                    -- 5. Bersihkan dan ulangi
                     FishingSystem.CleanupCast:FireServer()
+                    task.wait(0.5) -- Jeda antar lemparan
                 end
             end)
         end
     end
 end)
 
-WindUI:Notify({ Title = "Atomic v2.5", Content = "Anti-AFK & Multi-Catch Ready!", Duration = 5 })
+-- AUTO SELL LOOP
+local lastSell = tick()
+task.spawn(function()
+    while _G.ScriptRunning do
+        task.wait(5)
+        if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
+            SellAllBatch()
+            lastSell = tick()
+        end
+    end
+end)
+
+WindUI:Notify({ Title = "Atomic v3.0", Content = "Instant Catch & Anti-AFK Active!", Duration = 3 })
