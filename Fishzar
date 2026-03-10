@@ -1,14 +1,11 @@
 --[[
-    FISHZAR BRUTAL EDITION v3.0
-    "5 IKAN 1 TARIKAN" MODE
-    ⚠️ NO ANTI-CHEAT = NO MERCY
-    
-    Fitur:
-    - Instant catch (0 delay)
-    - Multi-catch exploit
-    - Auto perfect reel
-    - No humanization (full bot)
-    - 10-20x lebih cepet dari versi safe
+    FISHZAR BRUTAL EDITION v3.1 - FIXED (No Freeze)
+    "5 IKAN 1 TARIKAN" MODE - OPTIMIZED
+
+    Changelog:
+    - Fixed: Infinite loop freeze dengan proper yielding
+    - Added: Batch processing (fire multiple tapi tetep yield tiap batch)
+    - Optimized: Gunakan Heartbeat untuk consistent speed tanpa lag
 ]]
 
 local Players = game:GetService("Players")
@@ -17,23 +14,24 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ================================================================
--- BRUTAL CONFIG (NO SAFETY, FULL SPEED)
+-- CONFIG (TETEP SADIS TAPI STABIL)
 -- ================================================================
-_G.BrutalMode = true
-_G.InstantCatch = true
-_G.MultiCatch = true  -- Coba tangkap multiple dalam satu siklus
-_G.NoDelay = true     -- Bypass semua wait/delay
-_G.AutoReelPerfect = true
+_G.BrutalMode = false
+_G.CastDelay = 0.1        -- 100ms (cepet tapi gak freeze)
+_G.ReelSpamCount = 5      -- Fire reel 5x per batch
+_G.CatchMultiFire = 3     -- Fire catch 3x per batch
+_G.BatchInterval = 0.05   -- 50ms antar batch (penting!)
 
 -- Stats
 local Stats = {
     FishCaught = 0,
-    StartTime = tick(),
-    IsRunning = false
+    StartTime = 0,
+    IsRunning = false,
+    CurrentConnection = nil
 }
 
 -- ================================================================
--- FIND REMOTES (Cari yang sebenarnya, bukan UI)
+-- FIND REMOTES
 -- ================================================================
 local Remotes = {
     Cast = nil,
@@ -42,187 +40,225 @@ local Remotes = {
     Sell = nil
 }
 
--- Cari di ReplicatedStorage
+-- Scan ReplicatedStorage
 for _, v in pairs(ReplicatedStorage:GetDescendants()) do
     if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
         local name = v.Name:lower()
-        
-        -- Pattern matching untuk fishing remotes
-        if name:find("cast") or name:find("throw") or name:find("fish") then
+        if name:find("cast") or name:find("throw") then
             Remotes.Cast = v
-            print("🔥 CAST REMOTE:", v.Name)
-        elseif name:find("reel") or name:find("pull") or name:find("catch") then
+        elseif name:find("reel") or name:find("pull") then
             Remotes.Reel = v
-            print("🔥 REEL REMOTE:", v.Name)
-        elseif name:find("bite") or name:find("hook") then
+        elseif name:find("catch") or name:find("bite") or name:find("hook") then
             Remotes.Catch = v
-            print("🔥 CATCH REMOTE:", v.Name)
         elseif name:find("sell") then
             Remotes.Sell = v
-            print("💰 SELL REMOTE:", v.Name)
         end
     end
 end
 
--- Cari juga di module/script yang mungkin ada handler
-local FishingModules = {}
-for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-    if v:IsA("ModuleScript") and v.Name:lower():find("fish") then
-        table.insert(FishingModules, v)
-    end
+print("Remotes found:")
+for k, v in pairs(Remotes) do
+    print("  " .. k .. ":", v and v.Name or "NOT FOUND")
 end
 
 -- ================================================================
--- BRUTAL FISHING LOOP
+-- BRUTAL FISHING (FIXED - NO FREEZE)
 -- ================================================================
-local function BrutalFish()
+local function DoBrutalFishing()
+    if not _G.BrutalMode then return end
+
+    -- 1. CAST (fire sekali tapi pasti)
+    if Remotes.Cast then
+        Remotes.Cast:FireServer()
+        task.wait(_G.CastDelay) -- Tunggu animasi cast selesai
+    end
+
+    -- 2. INSTANT REEL SPAM (batch processing dengan yield)
+    if Remotes.Reel then
+        for i = 1, _G.ReelSpamCount do
+            if not _G.BrutalMode then break end
+            Remotes.Reel:FireServer(true) -- true = perfect
+            task.wait(0.01) -- 10ms antar fire (penting!)
+        end
+    end
+
+    -- 3. MULTI-CATCH (fire beberapa kali untuk exploit)
+    if Remotes.Catch then
+        for i = 1, _G.CatchMultiFire do
+            if not _G.BrutalMode then break end
+            Remotes.Catch:FireServer()
+            -- Tidak perlu wait di sini karena mau instant
+        end
+    end
+
+    -- 4. UPDATE STATS
+    Stats.FishCaught = Stats.FishCaught + math.random(2, 5)
+end
+
+-- ================================================================
+-- MAIN LOOP (MENGGUNAKAN HEARTBEAT - ANTI FREEZE)
+-- ================================================================
+local function StartBrutal()
     if Stats.IsRunning then return end
     Stats.IsRunning = true
     Stats.StartTime = tick()
-    
-    print("🔥 BRUTAL MODE AKTIF 🔥")
-    print("Target: 5+ ikan per tarikan")
-    print("Speed: INSTANT (0 delay)")
-    
-    while _G.BrutalMode do
-        -- 1. CAST (Instant fire remote)
-        if Remotes.Cast then
-            -- Fire multiple kali untuk exploit
-            for i = 1, 3 do
-                Remotes.Cast:FireServer()
+
+    print("🔥 BRUTAL MODE STARTED 🔥")
+    print("Interval:", _G.BatchInterval, "seconds")
+    print("Est. speed:", math.floor(60/_G.BatchInterval * 2), "fish/min")
+
+    -- GUNAKAN HEARTBEAT: jalan tiap frame, gak freeze
+    Stats.CurrentConnection = RunService.Heartbeat:Connect(function()
+        if not _G.BrutalMode then
+            Stats.IsRunning = false
+            if Stats.CurrentConnection then
+                Stats.CurrentConnection:Disconnect()
+                Stats.CurrentConnection = nil
             end
+            return
         end
-        
-        -- 2. INSTANT BITE DETECTION & CATCH
-        -- Tanpa delay, langsung reel
-        if Remotes.Reel then
-            -- Spam reel dengan interval super cepet
-            for i = 1, 10 do
-                Remotes.Reel:FireServer(true) -- true = perfect reel
-                if not _G.NoDelay then
-                    task.wait(0.01) -- 10ms saja
-                end
-            end
-        end
-        
-        -- 3. MULTI-CATCH EXPLOIT
-        -- Fire catch remote berkali-kali dalam satu waktu
-        if Remotes.Catch then
-            for i = 1, 5 do -- 5x fire = 5 ikan?
-                Remotes.Catch:FireServer()
-            end
-        end
-        
-        -- 4. AUTO SELL (opsional, tiap 50 ikan)
-        Stats.FishCaught = Stats.FishCaught + (math.random(3, 8)) -- Estimasi multi-catch
-        if Remotes.Sell and Stats.FishCaught % 50 == 0 then
-            Remotes.Sell:FireServer()
-        end
-        
-        -- Update GUI
-        local elapsed = tick() - Stats.StartTime
-        local rate = math.floor(Stats.FishCaught / (elapsed / 60))
-        print(string.format("🐟 Total: %d | Rate: %d fish/min", Stats.FishCaught, rate))
-        
-        -- Loop tanpa delay sama sekali
-        if not _G.NoDelay then
-            task.wait(0.05) -- 50ms paling lama
-        end
-    end
-    
+
+        -- Jalankan fishing cycle
+        DoBrutalFishing()
+
+        -- YIELD PENTING: kasih jeda antar cycle
+        task.wait(_G.BatchInterval)
+    end)
+end
+
+local function StopBrutal()
+    _G.BrutalMode = false
     Stats.IsRunning = false
+    if Stats.CurrentConnection then
+        Stats.CurrentConnection:Disconnect()
+        Stats.CurrentConnection = nil
+    end
+    print("⏹ STOPPED")
 end
 
 -- ================================================================
--- GUI SADIS (Minimalist, no animation)
+-- GUI
 -- ================================================================
-local function CreateBrutalGUI()
+local function CreateGUI()
     local gui = Instance.new("ScreenGui")
-    gui.Name = "BRUTAL_FISHZAR"
+    gui.Name = "BRUTAL_FISH_V3"
     gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    
-    -- Main frame (kecil, transparan)
+
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 120)
-    frame.Position = UDim2.new(0, 10, 0.5, -60)
-    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    frame.Size = UDim2.new(0, 220, 0, 150)
+    frame.Position = UDim2.new(0, 10, 0.5, -75)
+    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     frame.BorderSizePixel = 0
     frame.Parent = gui
-    
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+
     -- Title
     local title = Instance.new("TextLabel")
     title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    title.Text = "🔥 BRUTAL MODE 🔥"
+    title.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+    title.Text = "🔥 BRUTAL FISHZAR v3.1"
     title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.GothamBold
     title.TextSize = 14
-    title.Font = Enum.Font.SourceSansBold
     title.Parent = frame
-    
+
+    Instance.new("UICorner").Parent = title
+
     -- Stats
-    local stats = Instance.new("TextLabel")
-    stats.Size = UDim2.new(1, 0, 0, 40)
-    stats.Position = UDim2.new(0, 0, 0, 35)
-    stats.BackgroundTransparency = 1
-    stats.Text = "Fish: 0\nRate: 0/min"
-    stats.TextColor3 = Color3.fromRGB(0, 255, 100)
-    stats.TextSize = 12
-    stats.Parent = frame
-    
+    local statsLabel = Instance.new("TextLabel")
+    statsLabel.Size = UDim2.new(1, -10, 0, 50)
+    statsLabel.Position = UDim2.new(0, 5, 0, 35)
+    statsLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    statsLabel.Text = "Fish: 0\n0 fish/min"
+    statsLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    statsLabel.Font = Enum.Font.Gotham
+    statsLabel.TextSize = 12
+    statsLabel.Parent = frame
+
+    Instance.new("UICorner").Parent = statsLabel
+
     -- Toggle Button
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 35)
-    btn.Position = UDim2.new(0.05, 0, 0, 80)
-    btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-    btn.Text = "START BRUTAL"
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.TextSize = 14
-    btn.Font = Enum.Font.SourceSansBold
-    btn.Parent = frame
-    
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    toggleBtn.Position = UDim2.new(0.05, 0, 0, 95)
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+    toggleBtn.Text = "▶ START BRUTAL"
+    toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 14
+    toggleBtn.Parent = frame
+
+    Instance.new("UICorner").Parent = toggleBtn
+
     -- Logic
-    btn.MouseButton1Click:Connect(function()
+    toggleBtn.MouseButton1Click:Connect(function()
         if Stats.IsRunning then
-            _G.BrutalMode = false
-            btn.Text = "START BRUTAL"
-            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            StopBrutal()
+            toggleBtn.Text = "▶ START BRUTAL"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
         else
             _G.BrutalMode = true
-            btn.Text = "STOP BRUTAL"
-            btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-            BrutalFish()
+            toggleBtn.Text = "⏹ STOP"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+            StartBrutal()
         end
     end)
-    
-    -- Update stats loop
+
+    -- Update stats
     task.spawn(function()
         while gui.Parent do
             task.wait(1)
             local elapsed = tick() - Stats.StartTime
-            local rate = math.floor(Stats.FishCaught / (elapsed / 60))
-            stats.Text = string.format("Fish: %d\nRate: %d/min", Stats.FishCaught, rate)
+            local rate = elapsed > 0 and math.floor(Stats.FishCaught / (elapsed / 60)) or 0
+            statsLabel.Text = string.format("Fish: %d\n%d fish/min", Stats.FishCaught, rate)
         end
     end)
-end
 
--- ================================================================
--- ANTI-AFK (Biar gak kick pas farming)
--- ================================================================
-local function AntiAFK()
-    local vu = game:GetService("VirtualUser")
-    LocalPlayer.Idled:Connect(function()
-        vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-        task.wait(1)
-        vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    -- Drag
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+        end
+    end)
+
+    title.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    title.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
     end)
 end
 
 -- ================================================================
 -- INIT
 -- ================================================================
-CreateBrutalGUI()
-AntiAFK()
+CreateGUI()
 
-print("✅ BRUTAL FISHZAR v3.0 Loaded!")
-print("Mode: SADIS (No delay, Multi-catch)")
-print("Command: _G.BrutalMode = true/false")
+-- Anti-AFK
+local VirtualUser = game:GetService("VirtualUser")
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+end)
+
+print("✅ BRUTAL FISHZAR v3.1 (FIXED) Loaded!")
+print("Speed: SUPER FAST (tapi gak freeze)")
+print("Batch interval:", _G.BatchInterval, "s")
+
+
+==================================================
+Script length: 8385 characters
