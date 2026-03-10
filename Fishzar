@@ -1,4 +1,4 @@
--- [[ DapzX Atomic - Version 3.3 (Final Fix) ]] --
+-- [[ DapzX Atomic - Version 3.4 (Ultimate Fix) ]] --
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,18 +7,14 @@ local LocalPlayer = Players.LocalPlayer
 local VirtualUser = game:GetService("VirtualUser")
 
 -- ============================================================================
--- FIX WINDUI LOADER (Gunakan metode ini agar tidak Nil)
+-- ROBUST WINDUI LOADER
 -- ============================================================================
-local WindUI = nil
-local status, err = pcall(function()
-    local raw = game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua")
-    WindUI = loadstring(raw)()
-end)
+local WindUIProvider = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))
+local WindUI = WindUIProvider() -- Memanggil fungsi untuk mendapatkan tabel library
 
+-- Tunggu sebentar sampai library benar-benar siap
 if not WindUI then
-    warn("WindUI Gagal Dimuat. Error: " .. tostring(err))
-    -- Alternatif loader jika HttpGet gagal
-    WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    repeat task.wait(0.1) until WindUI ~= nil
 end
 
 -- ============================================================================
@@ -72,10 +68,10 @@ local function SellAllBatch()
 end
 
 -- ============================================================================
--- CREATE WINDOW (Line 84 Fix)
+-- UI INITIALIZATION
 -- ============================================================================
 local Window = WindUI:CreateWindow({
-    Title = "DapzX Atomic | v3.3",
+    Title = "DapzX Atomic | v3.4",
     Author = "by DapzX",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
@@ -83,36 +79,35 @@ local Window = WindUI:CreateWindow({
     OpenButton = { Enabled = true, Draggable = true }
 })
 
--- TAB: FISHING
+-- TABS
 local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
-local FishSection = FishingTab:Section({ Title = "Auto Farm Controls" })
+local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:bag-check-bold" })
+local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
 
-FishSection:Toggle({
-    Title = "Auto Farm",
+-- FISHING SECTION
+FishingTab:Section({ Title = "Auto Farm" }):Toggle({
+    Title = "Enable Farm",
     Value = false,
     Callback = function(v) _G.FarmingActive = v end
 })
 
-FishSection:Slider({
+FishingTab:Section({ Title = "Timing" }):Slider({
     Title = "Catch Delay (Detik)",
-    Desc = "Kecepatan tarik. (Safe: 1.0 - 1.5s)",
     Step = 0.1,
     Value = {Min = 0.1, Max = 5.0, Default = 1.5},
     Callback = function(v) _G.CatchDelay = v end
 })
 
--- TAB: SHOP
-local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:bag-check-bold" })
+-- SHOP SECTION
 ShopTab:Section({ Title = "Auto Sell" }):Toggle({
     Title = "Enable Auto Sell",
     Value = false,
     Callback = function(v) _G.AutoSellActive = v end
 })
 
--- TAB: TELEPORT
-local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
-TeleportTab:Section({ Title = "Locations" }):Dropdown({
-    Title = "Ke Pulau",
+-- TELEPORT SECTION
+TeleportTab:Section({ Title = "Quick Travel" }):Dropdown({
+    Title = "Pilih Lokasi",
     Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ", "Megalodon Zone"},
     Callback = function(opt)
         local island = type(opt) == "table" and opt.Title or opt
@@ -124,13 +119,13 @@ TeleportTab:Section({ Title = "Locations" }):Dropdown({
 })
 
 -- ============================================================================
--- CORE LOOP (BYPASS SYSTEM)
+-- CORE LOGIC
 -- ============================================================================
 local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 15)
 
 task.spawn(function()
     while _G.ScriptRunning do
-        task.wait(0.3 + (math.random(1, 3)/10))
+        task.wait(0.5)
         if _G.FarmingActive and FishingSystem then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -141,23 +136,14 @@ task.spawn(function()
                     local rodName = tool.Name
                     local castPos = root.Position + (root.CFrame.LookVector * 15)
                     
-                    -- 1. Cast
                     FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 98)
                     task.wait(1.2)
-                    
-                    -- 2. Precalc
                     FishingSystem.PrecalcFish:InvokeServer()
-                    
-                    -- 3. Minigame Start Signal (PENTING BIAR GAK KICK)
                     FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
                     
-                    -- 4. Dynamic Delay (Sesuai Slider)
-                    task.wait(_G.CatchDelay)
+                    task.wait(_G.CatchDelay) -- Delay yang bisa diatur
                     
-                    -- 5. Give Fish
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    
-                    -- 6. Cleanup
                     task.wait(0.2)
                     FishingSystem.CleanupCast:FireServer()
                 end
@@ -166,11 +152,11 @@ task.spawn(function()
     end
 end)
 
--- AUTO SELL LOOP
-local lastSell = tick()
+-- Auto Sell Loop
 task.spawn(function()
+    local lastSell = tick()
     while _G.ScriptRunning do
-        task.wait(5)
+        task.wait(2)
         if _G.AutoSellActive and (tick() - lastSell) >= ((tonumber(_G.AutoSellDelay) or 1) * 60) then
             SellAllBatch()
             lastSell = tick()
@@ -178,4 +164,4 @@ task.spawn(function()
     end
 end)
 
-WindUI:Notify({ Title = "DapzX Atomic", Content = "Script Loaded! Catch Delay Ready.", Duration = 4 })
+WindUI:Notify({ Title = "Success", Content = "DapzX Atomic Loaded!", Duration = 3 })
