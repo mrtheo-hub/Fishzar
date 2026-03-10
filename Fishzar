@@ -1,4 +1,4 @@
--- [[ DAPZX ATOMIC | FISHZAR V3.6.0 ]]
+-- [[ DAPZX ATOMIC | FISHZAR V3.9.0 ]]
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
@@ -22,27 +22,53 @@ end
 CreateLoadingScreen()
 
 -- [[ 2. CONFIG ]]
-_G.Version = "v3.6.0"
+_G.Version = "v3.9.0"
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WalkOnWater = false
 _G.WebhookURL = ""
-_G.MinigameDelay = 3.0
-_G.FilterRarity = {["Common"]=false,["Uncommon"]=false,["Rare"]=false,["Epic"]=false,["Legendary"]=false,["Secret"]=false}
+_G.MinigameDelay = 0.1 -- Default Instant
+_G.FilterRarity = {["Common"]=true,["Uncommon"]=true,["Rare"]=true,["Epic"]=true,["Legendary"]=true,["Secret"]=true}
 
--- [[ 3. UI WINDOW ]]
+-- [[ 3. WEBHOOK NOTIF ]]
+local function TestWebhook()
+    if _G.WebhookURL == "" or not _G.WebhookURL:match("discord.com/api/webhooks") then return end
+    local data = {embeds = {{
+        title = "✅ Webhook Connected!",
+        description = "Koneksi ke **DapzX Atomic** Berhasil!\nInstant Fishing: **Active**",
+        color = 65280,
+        footer = {text = "System Check | "..os.date("%X")}
+    }}}
+    pcall(function() (http_request or request or syn.request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
+end
+
+local function SendWebhook(item)
+    if _G.WebhookURL == "" or not _G.FilterRarity[item:GetAttribute("rarity")] then return end
+    local data = {embeds = {{
+        title = "🎣 Ikan Tertangkap!",
+        color = 3447003,
+        fields = {
+            {name = "Nama", value = item:GetAttribute("fishId") or item.Name, inline = true},
+            {name = "Rarity", value = item:GetAttribute("rarity") or "Unknown", inline = true},
+            {name = "Berat", value = (item:GetAttribute("weight") or 0) .. " kg", inline = true}
+        },
+        footer = {text = "DapzX Atomic System | "..os.date("%X")}
+    }}}
+    pcall(function() (http_request or request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
+end
+
+-- [[ 4. UI WINDOW ]]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 local Window = WindUI:CreateWindow({Title = "DapzX Atomic | Fishzar", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
 Window:Tag({Title = "Version: ".._G.Version, Color = Color3.fromHex("#F48C06")})
 Window:Tag({Title = "Exec: "..(identifyexecutor() or "Unknown"), Color = Color3.fromHex("#06FFA5")})
 
--- TABS
 local PlayerTab = Window:Tab({Title = "Local Player", Icon = "solar:user-bold"})
 PlayerTab:Section({Title = "Movement"}):Toggle({Title = "Walk on Water", Callback = function(s) _G.WalkOnWater = s end})
 
 local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
 FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Callback = function(s) _G.FarmingActive = s end})
-FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Value = {Min = 0.5, Max = 10, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
+FishingTab:Section({Title = "Instant Settings"}):Slider({Title = "Instant Delay", Value = {Min = 0.1, Max = 5, Default = 0.1}, Callback = function(v) _G.MinigameDelay = v end})
 
 local SellTab = Window:Tab({Title = "Auto Sell", Icon = "solar:bag-bold"})
 SellTab:Section({Title = "System"}):Toggle({Title = "Enable Auto Sell", Callback = function(s) _G.AutoSellActive = s end})
@@ -59,30 +85,21 @@ for name, pos in pairs(Islands) do
 end
 
 local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-IntegrationTab:Section({Title = "Webhook"}):Input({Title = "URL", Callback = function(v) _G.WebhookURL = v end})
-local FSec = IntegrationTab:Section({Title = "Filter Rarity (Notif)"})
+IntegrationTab:Section({Title = "Webhook"}):Input({
+    Title = "URL Webhook", 
+    Placeholder = "Paste link...",
+    Callback = function(v) 
+        _G.WebhookURL = v 
+        TestWebhook() 
+        WindUI:Notify({Title = "Webhook", Content = "Test koneksi terkirim!", Duration = 3})
+    end
+})
+local FSec = IntegrationTab:Section({Title = "Filter Rarity"})
 for _, r in pairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}) do
-    FSec:Toggle({Title = r, Callback = function(s) _G.FilterRarity[r] = s end})
-end
-
--- [[ 4. UTILITY FUNCTIONS ]]
-local function SendWebhook(item)
-    if _G.WebhookURL == "" or not _G.FilterRarity[item:GetAttribute("rarity")] then return end
-    local data = {embeds = {{
-        title = "🎣 Ikan Tertangkap!",
-        color = 3447003,
-        fields = {
-            {name = "Nama", value = item:GetAttribute("fishId") or item.Name, inline = true},
-            {name = "Rarity", value = item:GetAttribute("rarity") or "Unknown", inline = true},
-            {name = "Berat", value = (item:GetAttribute("weight") or 0) .. " kg", inline = true}
-        },
-        footer = {text = "DapzX Atomic System | "..os.date("%X")}
-    }}}
-    pcall(function() (http_request or request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
+    FSec:Toggle({Title = r, Value = true, Callback = function(s) _G.FilterRarity[r] = s end})
 end
 
 -- [[ 5. MAIN LOOPS ]]
--- Walk on Water
 local WaterPart
 RunService.RenderStepped:Connect(function()
     if _G.WalkOnWater and LocalPlayer.Character then
@@ -91,40 +108,37 @@ RunService.RenderStepped:Connect(function()
     elseif WaterPart then WaterPart:Destroy(); WaterPart = nil end
 end)
 
--- Fishing Loop (METODE ASLI ANDA)
+-- Fishing Loop (INSTANT FIX)
 task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
     while true do
-        task.wait(0.5)
+        task.wait(0.1)
         if _G.FarmingActive and LocalPlayer.Character then
             local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
             local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if tool and root then
                 local castPos = root.Position + (root.CFrame.LookVector * 15)
                 
-                -- Cast (Metode Asli)
+                -- Instant Cast
                 FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                task.wait(1.5 + _G.MinigameDelay)
+                task.wait(_G.MinigameDelay) -- Delay minimal
                 
-                -- Pull/Giver (Metode Asli)
+                -- Instant Giver
                 FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
                 
-                -- Webhook Check
-                task.wait(0.5)
+                -- Webhook & Cleanup
+                task.wait(0.2)
                 for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                    if item:IsA("Tool") and item:GetAttribute("rarity") then
-                        SendWebhook(item)
-                    end
+                    if item:IsA("Tool") and item:GetAttribute("rarity") then SendWebhook(item) end
                 end
-
                 FishingSystem.CleanupCast:FireServer()
-                task.wait(7) -- Delay Webhook & Anti-spam
+                task.wait(1.5) -- Delay antar tarikan agar tidak mencurigakan/kick
             end
         end
     end
 end)
 
--- Auto Sell Loop
+-- Auto Sell
 task.spawn(function()
     while task.wait(15) do
         if _G.AutoSellActive then
