@@ -29,65 +29,69 @@ local Islands = {
 }
 
 -- ============================================================================
--- UTILITY & WEBHOOK
+-- FIX: WEBHOOK & INTEGRATION
 -- ============================================================================
 local function SendWebhook(fishList)
     if _G.WebhookURL == "" or not _G.WebhookURL:find("discord.com") then return end
+    
     local fields = {}
     for i, v in ipairs(fishList) do
         if i > 10 then break end
         table.insert(fields, {["name"] = "🐟 " .. v.fishId, ["value"] = "Rarity: " .. v.rarity .. "\nWeight: " .. v.weight .. "kg", ["inline"] = true})
     end
+
     local data = {["embeds"] = {{["title"] = "🎣 Fish Sold!", ["description"] = "Berhasil menjual " .. #fishList .. " ikan.", ["color"] = 65445, ["fields"] = fields}}}
-    pcall(function() (http_request or request)({Url = _G.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
-end
+    local json = HttpService:JSONEncode(data)
 
-local function GetFishData(tool)
-    if not tool or not tool:IsA("Tool") then return nil end
-    local fId = tool:GetAttribute("fishId") or tool:GetAttribute("FishId")
-    local w = tool:GetAttribute("weight") or tool:GetAttribute("Weight")
-    local r = tool:GetAttribute("rarity") or tool:GetAttribute("Rarity")
-    return (fId and w and r) and {["weight"] = tonumber(w), ["rarity"] = tostring(r), ["fishId"] = tostring(fId)} or nil
-end
+    local success, response = pcall(function()
+        return (http_request or request or syn.request)({
+            Url = _G.WebhookURL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = json
+        })
+    end)
 
-local function SellAllBatch()
-    local fishBatch = {}
-    local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
-    if not sellEvent then return end
-    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-        local data = GetFishData(item)
-        if data then table.insert(fishBatch, data) end
-    end
-    if #fishBatch > 0 then
-        sellEvent:FireServer("SellAllBatch", fishBatch)
-        SendWebhook(fishBatch)
-    end
+    return success, response
 end
 
 -- ============================================================================
--- UI CREATION
+-- TAB: INTEGRATION (FIXED)
 -- ============================================================================
-local Window = WindUI:CreateWindow({Title = "Flow Hub | Fishzar", Author = "by Theodore", Folder = "dapzxatomic", Icon = "solar:atom-bold", Size = UDim2.fromOffset(580, 460)})
-
--- TAB: FISHING
-local FishingTab = Window:Tab({Title = "Fishing", Icon = "solar:cursor-square-bold"})
-FishingTab:Section({Title = "Auto Farm"}):Toggle({Title = "Enable Auto Farm", Value = false, Callback = function(s) _G.FarmingActive = s end})
-FishingTab:Section({Title = "Settings"}):Slider({Title = "Delay (Detik)", Step = 0.5, Value = {Min = 0.5, Max = 5, Default = 3}, Callback = function(v) _G.MinigameDelay = v end})
-
--- TAB: SHOP
-local ShopTab = Window:Tab({Title = "Shop", Icon = "solar:bag-check-bold"})
-ShopTab:Section({Title = "Auto Sell"}):Toggle({Title = "Enable Auto Sell", Value = false, Callback = function(s) _G.AutoSellActive = s end})
-ShopTab:Section({Title = "Interval"}):Slider({Title = "Menit", Step = 1, Value = {Min = 1, Max = 10, Default = 1}, Callback = function(v) _G.AutoSellDelay = v end})
-
--- TAB: INTEGRATION (NEW)
 local IntegrationTab = Window:Tab({Title = "Integration", Icon = "solar:settings-bold"})
-IntegrationTab:Section({Title = "Discord Webhook"}):Input({Title = "Webhook URL", Placeholder = "Paste URL di sini...", Callback = function(v) _G.WebhookURL = v end})
 
--- TAB: TELEPORT
-local TeleportTab = Window:Tab({Title = "Teleport", Icon = "solar:map-point-wave-bold"})
-for name, pos in pairs(Islands) do
-    TeleportTab:Section({Title = name}):Button({Title = "Teleport ke " .. name, Callback = function() if LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(pos) end end})
-end
+IntegrationTab:Section({Title = "Discord Webhook Setup"}):Input({
+    Title = "Webhook URL",
+    Placeholder = "Paste URL di sini...",
+    Callback = function(v) _G.WebhookURL = v end
+})
+
+IntegrationTab:Section({Title = "Test & Status"}):Button({
+    Title = "Test Webhook Connection",
+    Callback = function()
+        if _G.WebhookURL == "" or not _G.WebhookURL:find("discord.com") then
+            WindUI:Notify({Title = "Error", Content = "URL Webhook kosong atau tidak valid!", Duration = 3})
+            return
+        end
+
+        WindUI:Notify({Title = "Testing", Content = "Mengirim pesan percobaan...", Duration = 2})
+        
+        local success, response = pcall(function()
+            return (http_request or request or syn.request)({
+                Url = _G.WebhookURL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode({["content"] = "✅ DapzX Atomic: Webhook Terhubung dengan Sukses!"})
+            })
+        end)
+
+        if success and response.StatusCode < 300 then
+            WindUI:Notify({Title = "Success", Content = "Webhook Terhubung!", Duration = 3})
+        else
+            WindUI:Notify({Title = "Gagal", Content = "Webhook gagal terhubung. Cek URL atau Executor!", Duration = 3})
+        end
+    end
+})
 
 -- ============================================================================
 -- LOOPS
