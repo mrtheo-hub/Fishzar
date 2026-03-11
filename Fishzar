@@ -1,76 +1,96 @@
--- [[ DAPZX ATOMIC | INTEGRATED FIX V23.0.2 ]]
+-- [[ DAPZX ATOMIC | FINAL STABLE INTEGRATED VERSION ]]
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 
--- [FIX 1: Anti Drown & Walk Water Logic]
-local function AntiDrown()
-    if _G.Config and _G.Config.Drown then
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
-        end
-    end
+-- [1] INITIALIZATION SAFETY
+if not game:IsLoaded() then game.Loaded:Wait() end
+print("DapzX: Initializing...")
+
+-- [2] LOAD WINDUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- [3] CONFIGS
+_G.FarmingActive = false
+_G.MinigameDelay = 3.0
+_G.AutoSellActive = false
+_G.ScriptRunning = true
+
+-- [4] FISHING SYSTEM REFERENCES
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
+local FishingModules = FishingSystem:WaitForChild("FishingModules")
+local AnimController = require(FishingModules:WaitForChild("AnimationController"))
+local CastingModule = require(FishingModules:WaitForChild("CastingSystem"))
+
+-- [5] FUNCTIONS
+local function getRodTip(character)
+    local rod = character:FindFirstChildWhichIsA("Tool")
+    if rod then return rod:FindFirstChild("Part") or rod:FindFirstChild("Handle") end
+    return nil
 end
 
--- [FIX 4: FPS Booster]
-local function Booster()
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v:Destroy()
-        end
-    end
+local function getEquippedRod()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
+    return tool and tool.Name or nil
 end
 
--- [FIX 6: Integrated Fishing Loop (Dari Source Baru)]
+-- [6] GUI SETUP
+local Window = WindUI:CreateWindow({
+    Title = "DapzX Atomic | Fixed",
+    Icon = "solar:atom-bold",
+    Size = UDim2.fromOffset(580, 460)
+})
+
+local Tab = Window:Tab({Title = "Fishing", Icon = "solar:fishing-rod-bold"})
+
+Tab:Toggle({
+    Title = "Auto Farm",
+    Callback = function(s) _G.FarmingActive = s end
+})
+
+-- [7] MAIN LOOP (INTEGRATED)
 task.spawn(function()
     while _G.ScriptRunning do
         task.wait(0.2)
-        if _G.FarmingActive and FishingSystem then
+        if _G.FarmingActive then
             pcall(function()
                 local character = LocalPlayer.Character
                 local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                local actualRod = getEquippedRod()
-
-                if character and rootPart and actualRod then
+                local rodName = getEquippedRod()
+                
+                if rootPart and rodName then
                     local castPos = rootPart.Position + (rootPart.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
-                    local tipPart = getRodTip(character)
-
-                    -- Animasi & Cast
-                    if AnimController then pcall(function() AnimController:Play("PrepareCast", 0.1) end) end
-                    FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, actualRod, 99.5 + math.random())
                     
-                    local activeVisualHook = createRealVisual(tipPart, castPos, actualRod)
-
-                    task.wait(1.5)
-                    FishingSystem.PrecalcFish:InvokeServer()
-                    task.wait(0.5)
-
-                    -- Pull Logic
-                    if AnimController then pcall(function() AnimController:Play("PullingAnimation", 0.1) end) end
+                    -- Cast
+                    AnimController:Play("PrepareCast", 0.1)
+                    FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, rodName, 99.5)
+                    
+                    task.wait(1.5 + _G.MinigameDelay)
+                    
+                    -- Pull
                     FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-
-                    task.wait(_G.MinigameDelay)
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    task.wait(0.3)
-
+                    
+                    task.wait(0.5)
                     FishingSystem.CleanupCast:FireServer()
-                    if activeVisualHook then activeVisualHook:Destroy() end
-                    if AnimController then pcall(function() AnimController:Play("EquippedAnimation", 0.3) end) end
-
-                    task.wait(1.2)
+                    task.wait(1)
                 end
             end)
         end
-        AntiDrown() -- Monitoring terus menerus
     end
 end)
 
--- [FIX 3 & 5: Streamer & Webhook]
--- Tambahkan ini di dalam loop utama atau fungsi callback
-local function SendWebhook(content)
-    if _G.Config.Webhook ~= "" then
-        HttpService:PostAsync(_G.Config.Webhook, HttpService:JSONEncode({content = content}))
+-- [8] UTILITIES (ANTI-DROWN / FPS)
+task.spawn(function()
+    while task.wait(5) do
+        -- Anti Drown (Disable Dead state)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+        end
     end
-end
+end)
+
+print("DapzX: Loaded Successfully!")
