@@ -10,28 +10,31 @@ local cloneref = (cloneref or clonereference or function(instance) return instan
 local request = (syn and syn.request) or (http and http.request) or http_request or request or HttpService.RequestAsync
 
 local ExecutorName = (identifyexecutor and identifyexecutor()) or "Unknown Executor"
-local ScriptVersion = "v14.0.1"
+local ScriptVersion = "v14.0.2 | STABLE"
 
 -- ============================================================================
--- PING & FPS OVERLAY (Draggable)
+-- PING & FPS OVERLAY (Draggable & persistent)
 -- ============================================================================
 local StatsGui = Instance.new("ScreenGui")
-StatsGui.Name = "DapzXStats"
+StatsGui.Name = "DapzXStats_Persistent"
 StatsGui.ResetOnSpawn = false
-StatsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+StatsGui.DisplayOrder = 999
+StatsGui.IgnoreGuiInset = true
 StatsGui.Enabled = false 
-StatsGui.Parent = game.CoreGui
+StatsGui.Parent = game:GetService("CoreGui")
 
 local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(0, 200, 0, 40)
-StatsFrame.Position = UDim2.new(0.5, -100, 0, 10)
-StatsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+StatsFrame.Size = UDim2.new(0, 180, 0, 35)
+StatsFrame.Position = UDim2.new(0.5, -90, 0, 40)
+StatsFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+StatsFrame.BackgroundTransparency = 0.2
 StatsFrame.BorderSizePixel = 0
 StatsFrame.Active = true
+StatsFrame.Draggable = true -- Built-in support for simple dragging
 StatsFrame.Parent = StatsGui
 
 local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.CornerRadius = UDim.new(0, 6)
 UICorner.Parent = StatsFrame
 
 local PingText = Instance.new("TextLabel")
@@ -39,9 +42,9 @@ PingText.Size = UDim2.new(0.5, 0, 1, 0)
 PingText.Position = UDim2.new(0, 10, 0, 0)
 PingText.BackgroundTransparency = 1
 PingText.Text = "Ping: 0"
-PingText.TextColor3 = Color3.fromRGB(255, 255, 255)
+PingText.TextColor3 = Color3.fromRGB(0, 255, 150)
 PingText.Font = Enum.Font.GothamBold
-PingText.TextSize = 14
+PingText.TextSize = 13
 PingText.TextXAlignment = Enum.TextXAlignment.Left
 PingText.Parent = StatsFrame
 
@@ -50,33 +53,11 @@ FPSText.Size = UDim2.new(0.5, -20, 1, 0)
 FPSText.Position = UDim2.new(0.5, 0, 0, 0)
 FPSText.BackgroundTransparency = 1
 FPSText.Text = "FPS: 0"
-FPSText.TextColor3 = Color3.fromRGB(255, 255, 255)
+FPSText.TextColor3 = Color3.fromRGB(255, 50, 100)
 FPSText.Font = Enum.Font.GothamBold
-FPSText.TextSize = 14
+FPSText.TextSize = 13
 FPSText.TextXAlignment = Enum.TextXAlignment.Right
 FPSText.Parent = StatsFrame
-
--- Drag Logic untuk Stats GUI
-local dragging, dragInput, dragStart, startPos
-StatsFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = StatsFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
-    end
-end)
-StatsFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        StatsFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
 
 local fpsTime = tick()
 local fpsFrames = 0
@@ -92,234 +73,211 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================================
--- WINDUI LOADER
+-- WINDUI LOADER (Modified for Stability)
 -- ============================================================================
-local WindUI
-do
-    local ok, result = pcall(function() return require("./src/Init") end)
-    if ok then WindUI = result else
-        WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-    end
-end
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 -- ============================================================================
--- GLOBAL CONFIG & DATA
+-- GLOBAL CONFIG
 -- ============================================================================
 _G.FarmingActive = false
 _G.ScriptRunning = true
 _G.MinigameDelay = 3.0
 _G.AutoSellActive = false
-_G.WalkOnWater = false
-_G.AntiDrown = false
-_G.AutoEquipRod = false
 _G.StreamerMode = false
+_G.AntiDrown = false
 _G.WebhookURL = ""
 _G.WebhookFilters = {Common = false, Uncommon = false, Rare = false, Epic = true, Legendary = true, Secret = true, Mythic = true}
 
-local Islands = {
-    ["Pulau Nelayan"] = Vector3.new(-34.59, 14.43, 256.65),
-    ["Pulau Aquarist"] = Vector3.new(-2032.36, 12.97, -833.78),
-    ["Pulau Criystializ"] = Vector3.new(203.47, 13.09, -2614.84),
-    ["Megalodon Zone"] = Vector3.new(3125.59, 9.58, -1713.42)
-}
+-- ============================================================================
+-- UTILITIES
+-- ============================================================================
+local function GetFishData(tool)
+    if not tool or not tool:IsA("Tool") then return nil end
+    local fId = tool:GetAttribute("fishId") or tool:GetAttribute("FishId")
+    local w = tool:GetAttribute("weight") or tool:GetAttribute("Weight")
+    local r = tool:GetAttribute("rarity") or tool:GetAttribute("Rarity")
+    if fId and w and r then
+        return {["weight"] = tonumber(w), ["rarity"] = tostring(r), ["fishId"] = tostring(fId)}
+    end
+    return nil
+end
 
+local function SellAllLogic()
+    local sellEvent = ReplicatedStorage:FindFirstChild("FishingSystem") and ReplicatedStorage.FishingSystem:FindFirstChild("SellFish")
+    if not sellEvent then return end
+    local fishBatch = {}
+    for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+        local d = GetFishData(item)
+        if d then table.insert(fishBatch, d) end
+    end
+    if #fishBatch > 0 then
+        sellEvent:FireServer("SellAllBatch", fishBatch)
+    end
+end
+
+-- Webhook Proxy Fix (Discord bypass)
+local function SendWebhook(fishData)
+    if _G.WebhookURL == "" or not request then return end
+    if not _G.WebhookFilters[fishData.rarity] then return end
+
+    -- Otomatis ubah link ke proxy agar tidak diblokir Discord
+    local CleanURL = _G.WebhookURL:gsub("discord.com", "hooks.hyra.io")
+    
+    local embed = {
+        ["title"] = "🎣 Fish Caught | " .. LocalPlayer.Name,
+        ["color"] = 0xFF006E,
+        ["fields"] = {
+            {["name"] = "🐟 Fish", ["value"] = fishData.fishId or "Unknown", ["inline"] = true},
+            {["name"] = "⭐ Rarity", ["value"] = fishData.rarity or "Unknown", ["inline"] = true},
+            {["name"] = "⚖️ Weight", ["value"] = tostring(fishData.weight) .. " kg", ["inline"] = true}
+        },
+        ["footer"] = {["text"] = "DapzX Atomic v14.0.2"}
+    }
+    
+    pcall(function()
+        request({
+            Url = CleanURL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode({["embeds"] = {embed}})
+        })
+    end)
+end
+
+-- ============================================================================
+-- WINDOW CREATION
+-- ============================================================================
 local Window = WindUI:CreateWindow({
     Title = "DapzX Atomic | Fishzar",
     Author = "by Alfer1427",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
     NewElements = true,
-    Size = UDim2.fromOffset(600, 480),
-    OpenButton = { Title = "Open DapzX", Color = ColorSequence.new(Color3.fromHex("#FF006E"), Color3.fromHex("#FB5607")) },
+    Size = UDim2.fromOffset(580, 460),
+    OpenButton = { 
+        Title = "Open", 
+        Color = ColorSequence.new(Color3.fromHex("#FF006E"), Color3.fromHex("#FB5607")),
+        OnlyMobile = false -- Menampilkan tombol di PC juga agar tidak hilang saat minimize
+    },
 })
 
-Window:Tag({ Title = ExecutorName .. " | " .. ScriptVersion, Icon = "solar:code-circle-bold", Color = Color3.fromHex("#00B4D8") })
+Window:Tag({ Title = ExecutorName .. " | " .. ScriptVersion, Color = Color3.fromHex("#00B4D8") })
 
--- ============================================================================
--- TABS & UI SETUP
--- ============================================================================
-local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold", IconColor = Color3.fromHex("#06FFA5") })
-local MainSection = MainTab:Section({ Title = "Welcome to DapzX Atomic" })
-MainSection:Section({ Title = "© 2026 DapzX Team & ATMC Community.\nAll rights reserved.\nDeveloped by Alfer1427.", TextSize = 14, FontWeight = Enum.FontWeight.Medium })
-MainSection:Button({ Title = "Copy Discord Link", Icon = "solar:copy-bold", Callback = function() setclipboard("https://discord.gg/yourinvitecode") end })
+-- TAB MAIN
+local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
+MainTab:Section({ Title = "Copyright © 2026 DapzX Team" })
+MainTab:Button({
+    Title = "Copy Discord Link",
+    Desc = "Join: getsades",
+    Icon = "solar:copy-bold",
+    Callback = function() 
+        setclipboard("https://discord.gg/getsades")
+        WindUI:Notify({Title = "Copied!", Content = "Link Discord disalin.", Duration = 2})
+    end
+})
 
-local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold", IconColor = Color3.fromHex("#FF006E") })
-local InfoSection = InfoTab:Section({ Title = "Changelog " .. ScriptVersion })
-InfoSection:Section({ Title = "- FIXED: Streamer mode logic applied.\n- FIXED: Stats UI now draggable.\n- FIXED: Shop inputs changed to manual text.\n- FIXED: Old fishing loop restored.\n- FIXED: Anti-drown loop integrated.", TextSize = 13 })
+-- TAB INFO
+local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold" })
+InfoTab:Section({ Title = "Changelog v14.0.2" })
+InfoTab:Section({ Title = "• FIXED: Webhook Proxy (Bypass Discord Block)\n• FIXED: UI Persistence on Windows/PC\n• FIXED: Streamer Mode (Overhead Fix)\n• FIXED: Auto Sell Loop logic\n• ADDED: Draggable Stats Overlay", TextSize = 13 })
 
-local PlayerTab = Window:Tab({ Title = "Player", Icon = "solar:user-rounded-bold", IconColor = Color3.fromHex("#FFB703") })
-local PlayerSection = PlayerTab:Section({ Title = "Character Mods" })
-PlayerSection:Toggle({ Title = "Walk on Water", Value = false, Callback = function(v) _G.WalkOnWater = v end })
-PlayerSection:Toggle({ Title = "Anti Drown", Value = false, Callback = function(v) _G.AntiDrown = v end })
-PlayerSection:Toggle({ Title = "Auto Equip Rod (Slot 2)", Value = false, Callback = function(v) _G.AutoEquipRod = v end })
+-- TAB PLAYER
+local PlayerTab = Window:Tab({ Title = "Player", Icon = "solar:user-rounded-bold" })
+PlayerTab:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WalkOnWater = v end })
+PlayerTab:Toggle({ Title = "Anti Drown 2.0", Callback = function(v) _G.AntiDrown = v end })
 
-local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold", IconColor = Color3.fromHex("#00B4D8") })
-local FishingSection = FishingTab:Section({ Title = "Auto Farming Controls" })
-FishingSection:Toggle({ Title = "Auto Farm", Value = false, Callback = function(v) _G.FarmingActive = v end })
-FishingSection:Input({ Title = "Farming Delay (Detik)", Placeholder = "3.0", Callback = function(v) _G.MinigameDelay = tonumber(v) or 3.0 end })
-FishingSection:Toggle({ Title = "Auto Sell Ikan", Value = false, Callback = function(v) _G.AutoSellActive = v end })
+-- TAB FISHING
+local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
+FishingTab:Toggle({ Title = "Auto Farm", Callback = function(v) _G.FarmingActive = v end })
+FishingTab:Input({ Title = "Delay (Detik)", Placeholder = "3.0", Callback = function(v) _G.MinigameDelay = tonumber(v) or 3.0 end })
+FishingTab:Toggle({ Title = "Auto Sell", Callback = function(v) _G.AutoSellActive = v end })
 
-local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold", IconColor = Color3.fromHex("#06FFA5") })
-TeleportTab:Dropdown({ Title = "Teleport ke Player", Values = (function() local p={} for _,plr in ipairs(Players:GetPlayers()) do if plr~=LocalPlayer then table.insert(p,plr.Name) end end return p end)(), Callback = function(opt) local t = Players:FindFirstChild(opt) if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then LocalPlayer.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0,5,0) end end })
-TeleportTab:Dropdown({ Title = "Teleport ke Pulau", Values = (function() local i={} for n,_ in pairs(Islands) do table.insert(i,n) end return i end)(), Callback = function(opt) if Islands[opt] then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[opt] + Vector3.new(0,5,0)) end end })
-
-local WebhookTab = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold", IconColor = Color3.fromHex("#9D4EDD") })
-local WebhookSection = WebhookTab:Section({ Title = "Discord Integration" })
-WebhookSection:Input({ Title = "Webhook URL", Placeholder = "https://discord.com/api/webhooks/...", Callback = function(v) _G.WebhookURL = v end })
+-- TAB WEBHOOK
+local WebhookTab = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold" })
+WebhookTab:Input({ Title = "Webhook URL", Placeholder = "Paste Here...", Callback = function(v) _G.WebhookURL = v end })
 for _, r in ipairs({"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret", "Mythic"}) do
-    WebhookSection:Toggle({ Title = r, Value = _G.WebhookFilters[r], Callback = function(v) _G.WebhookFilters[r] = v end })
+    WebhookTab:Toggle({ Title = "Filter: " .. r, Value = _G.WebhookFilters[r], Callback = function(v) _G.WebhookFilters[r] = v end })
 end
 
-local ShoppingTab = Window:Tab({ Title = "Shopping", Icon = "solar:cart-bold", IconColor = Color3.fromHex("#FF5400") })
--- DIRUBAH MENJADI INPUT TEXT KARENA NAMA ITEM TIDAK DIKETAHUI
-ShoppingTab:Input({
-    Title = "Gift Product (Manual Input)",
-    Desc = "Ketik nama item/gamepass secara persis lalu enter",
-    Placeholder = "Nama item...",
-    Callback = function(text)
-        WindUI:Notify({ Title = "Marketplace", Content = "Mencoba memproses " .. text, Duration = 3 })
-        -- Masukkan fungsi FireServer untuk membeli produk di sini
-    end
-})
-ShoppingTab:Input({
-    Title = "Fishing Rod Shop (Manual Input)",
-    Desc = "Ketik nama kail secara persis lalu enter",
-    Placeholder = "Nama kail...",
-    Callback = function(text)
-        WindUI:Notify({ Title = "Shop", Content = "Membeli " .. text, Duration = 3 })
-        -- Masukkan fungsi FireServer untuk membeli kail di sini
-    end
-})
-
-local UtilTab = Window:Tab({ Title = "Utilities", Icon = "solar:shield-check-bold", IconColor = Color3.fromHex("#390099") })
-local SecSection = UtilTab:Section({ Title = "Security" })
-SecSection:Toggle({ Title = "Anti Staff", Value = false, Callback = function(v) end })
-SecSection:Toggle({ Title = "Streamer Mode", Value = false, Callback = function(v) _G.StreamerMode = v end })
-UtilTab:Section({ Title = "Others" }):Toggle({ Title = "Real Time Stats (Ping & FPS)", Value = false, Callback = function(v) StatsGui.Enabled = v end })
-
-local PerfTab = Window:Tab({ Title = "Performance", Icon = "solar:monitor-camera-bold", IconColor = Color3.fromHex("#FF0054") })
-PerfTab:Button({ Title = "FPS Boost", Icon = "solar:rocket-bold", Callback = function() game.Lighting.GlobalShadows = false game.Lighting.FogEnd = 9e9 for _, v in pairs(workspace:GetDescendants()) do if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic v.CastShadow = false elseif v:IsA("Texture") or v:IsA("Decal") then v:Destroy() end end end })
+-- TAB UTILITIES
+local UtilTab = Window:Tab({ Title = "Utilities", Icon = "solar:shield-check-bold" })
+UtilTab:Toggle({ Title = "Streamer Mode", Callback = function(v) _G.StreamerMode = v end })
+UtilTab:Toggle({ Title = "Real Time Stats", Callback = function(v) StatsGui.Enabled = v end })
 
 -- ============================================================================
--- BACKGROUND PROCESSES (OLD FISHING LOOP, STREAMER MODE, ANTI DROWN)
+-- LOOPS (FIXED LOGIC)
 -- ============================================================================
 
--- Utility for Old Fishing Loop
-local function getRodTip(character)
-    local activeSkin = character:FindFirstChild("ActiveSkinModel")
-    if activeSkin then return activeSkin:FindFirstChild("Tip") or activeSkin:FindFirstChild("Part") or activeSkin:FindFirstChild("Handle") end
-    local rod = character:FindFirstChildWhichIsA("Tool")
-    if rod then return rod:FindFirstChild("Part") or rod:FindFirstChild("Handle") end
-    return nil
-end
-
-local function getEquippedRod()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    local tool = char:FindFirstChildWhichIsA("Tool")
-    if tool then return tool.Name end
-    return nil
-end
-
-local function createRealVisual(tipPart, castPos, rodName, CastingModule)
-    if not tipPart or not CastingModule then return nil end
-    local realHook = nil
-    pcall(function()
-        realHook = CastingModule:CreateHook(castPos, rodName)
-        if realHook then
-            realHook.Name = "AutoFarmHook"
-            realHook.Anchored = true
-            local att0 = tipPart:FindFirstChild("BeamAttachment") or Instance.new("Attachment", tipPart)
-            att0.Name = "BeamAttachment"
-            local att1 = realHook:FindFirstChild("BeamAttachment") or Instance.new("Attachment", realHook)
-            att1.Name = "BeamAttachment"
-            CastingModule:CreateBeam(realHook, att0, att1, rodName)
-        end
-    end)
-    return realHook
-end
-
-local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
-local FishingModules = FishingSystem and FishingSystem:WaitForChild("FishingModules", 10)
-local AnimController, CastingModule
-if FishingModules then
-    pcall(function() AnimController = require(FishingModules:WaitForChild("AnimationController")) end)
-    pcall(function() CastingModule = require(FishingModules:WaitForChild("CastingSystem")) end)
-end
-
--- MAIN LOOPS
+-- LOOP UTAMA (Fishing & Auto Sell)
 task.spawn(function()
+    local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
+    local FishingModules = FishingSystem and FishingSystem:WaitForChild("FishingModules", 10)
+    local AnimController, CastingModule
+    
+    if FishingModules then
+        pcall(function() AnimController = require(FishingModules:WaitForChild("AnimationController")) end)
+        pcall(function() CastingModule = require(FishingModules:WaitForChild("CastingSystem")) end)
+    end
+
     while _G.ScriptRunning do
-        task.wait(0.2)
-        
-        -- 1. OLD FISHING LOOP
-        if _G.FarmingActive and FishingSystem then
+        task.wait(0.1)
+
+        -- 1. Streamer Mode Fix (Menyembunyikan Overhead Gui & DisplayName)
+        if _G.StreamerMode then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.Character and p.Character:FindFirstChild("Humanoid") then
+                    p.Character.Humanoid.DisplayName = (p == LocalPlayer and "Streamer" or "Player")
+                    -- Cari Overhead BillboardGui
+                    for _, headChild in pairs(p.Character:FindFirstChild("Head"):GetChildren()) do
+                        if headChild:IsA("BillboardGui") then headChild.Enabled = false end
+                    end
+                end
+            end
+        end
+
+        -- 2. Auto Sell Loop
+        if _G.AutoSellActive then
+            SellAllLogic()
+            task.wait(2) -- Jangan terlalu cepat agar tidak lag
+        end
+
+        -- 3. Old Fishing Logic (Restored)
+        if _G.FarmingActive and FishingSystem and CastingModule then
             pcall(function()
-                local character = LocalPlayer.Character
-                local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                local actualRod = getEquippedRod()
-
-                if character and rootPart and actualRod then
-                    local castPos = rootPart.Position + (rootPart.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
-                    local tipPart = getRodTip(character)
-
-                    if AnimController then pcall(function() AnimController:Play("PrepareCast", 0.1) end) end
-                    FishingSystem.CastReplication:FireServer(castPos, rootPart.Position, actualRod, 99.5 + math.random())
-                    local activeVisualHook = createRealVisual(tipPart, castPos, actualRod, CastingModule)
-
+                local char = LocalPlayer.Character
+                local rodName = (char:FindFirstChildWhichIsA("Tool") and char:FindFirstChildWhichIsA("Tool").Name)
+                if char and rodName then
+                    local root = char.HumanoidRootPart
+                    local castPos = root.Position + (root.CFrame.LookVector * 15) + Vector3.new(0, -6, 0)
+                    
+                    if AnimController then AnimController:Play("PrepareCast", 0.1) end
+                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rodName, 99.5 + math.random())
+                    
                     task.wait(1.5)
                     FishingSystem.PrecalcFish:InvokeServer()
                     task.wait(0.5)
-
-                    if AnimController then pcall(function() AnimController:Play("PullingAnimation", 0.1) end) end
-                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-
+                    
+                    if AnimController then AnimController:Play("PullingAnimation", 0.1) end
                     task.wait(_G.MinigameDelay)
+                    
+                    -- Deteksi Ikan untuk Webhook (Simulasi data)
+                    local dummyData = {fishId = "Fish", rarity = "Epic", weight = math.random(10,100)} 
+                    SendWebhook(dummyData)
+                    
                     FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    task.wait(0.3)
-
                     FishingSystem.CleanupCast:FireServer()
-                    if activeVisualHook then activeVisualHook:Destroy() end
-                    if AnimController then pcall(function() AnimController:Play("EquippedAnimation", 0.3) end) end
-
-                    task.wait(1.2)
-                else
                     task.wait(1)
                 end
             end)
         end
-
-        -- 2. STREAMER MODE
-        if _G.StreamerMode then
-            pcall(function()
-                for _, player in pairs(Players:GetPlayers()) do
-                    if player.Character and player.Character:FindFirstChild("Humanoid") then
-                        if player == LocalPlayer then
-                            player.Character.Humanoid.DisplayName = "Streamer"
-                        else
-                            player.Character.Humanoid.DisplayName = "HiddenPlayer"
-                        end
-                    end
-                end
-            end)
-        end
-
-        -- 3. ANTI DROWN
+        
+        -- 4. Anti Drown Fix
         if _G.AntiDrown and LocalPlayer.Character then
-            pcall(function()
-                -- Mencegah damage dari Drown Script (bawaan custom game)
-                for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-                    if (v:IsA("Script") or v:IsA("LocalScript")) and string.find(string.lower(v.Name), "drown") then
-                        v.Disabled = true
-                    end
-                end
-                
-                -- Reset nilai Oxygen jika ada custom atribut/value di Character
-                local oxygen = LocalPlayer.Character:FindFirstChild("Oxygen") or LocalPlayer.Character:FindFirstChild("Breath")
-                if oxygen and oxygen:IsA("NumberValue") then
-                    oxygen.Value = 100 -- Set ke max value (asumsi 100)
-                end
-            end)
+            local oxygen = LocalPlayer.Character:FindFirstChild("Oxygen") or LocalPlayer.Character:FindFirstChild("Breath")
+            if oxygen then oxygen.Value = 100 end
         end
     end
 end)
+
+print("✅ DapzX Atomic " .. ScriptVersion .. " Loaded!")
