@@ -4,19 +4,17 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- [ VERSION & EXECUTOR ]
 local Executor = (identifyexecutor and identifyexecutor()) or "Unknown"
-local ScriptVersion = "v14.0.8 | MEGA-RESTORE"
+local ScriptVersion = "v14.0.9 | STABLE-FIX"
 
--- [ CLEANUP OLD UI ]
+-- [ CLEANUP ]
 for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
     if v.Name == "WindUI" or v.Name == "DapzXStats" then v:Destroy() end
 end
 
--- [ LOADING WINDUI ]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
--- [ GLOBAL VARS ]
+-- [ GLOBAL CONFIG ]
 _G.FarmingActive = false
 _G.AutoSellActive = false
 _G.WalkOnWater = false
@@ -25,9 +23,8 @@ _G.AntiAFK = false
 _G.StreamerMode = false
 _G.MinigameDelay = 3.0
 _G.WebhookURL = ""
-_G.WebhookFilters = {Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true}
+_G.Filters = {Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true}
 
--- [ WINDOW CREATION ]
 local Window = WindUI:CreateWindow({
     Title = "DapzX Atomic | Fishzar",
     Author = "by Alfer1427",
@@ -35,168 +32,109 @@ local Window = WindUI:CreateWindow({
     Size = UDim2.fromOffset(580, 460)
 })
 
-Window:Tag({ Title = Executor .. " | " .. ScriptVersion, Color = Color3.fromHex("#FF006E") })
+Window:Tag({ Title = Executor .. " | " .. ScriptVersion, Color = Color3.fromHex("#00B4D8") })
 
--- ============================================================================
--- 1. MAIN TAB
--- ============================================================================
+-- 1. MAIN
 local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-MainTab:Dropdown({
-    Title = "Social & Info",
-    Values = {"Copy Discord Link", "Check Executor", "Credits"},
-    Callback = function(v)
-        if v == "Copy Discord Link" then setclipboard("https://discord.gg/getsades")
-        elseif v == "Check Executor" then WindUI:Notify({Title = "Executor", Content = "You are using: "..Executor})
-        end
-    end
-})
+MainTab:Button({ Title = "Copy Discord (getsades)", Callback = function() setclipboard("https://discord.gg/getsades") end })
+MainTab:Button({ Title = "Check Executor", Callback = function() WindUI:Notify({Title = "Executor", Content = "Running on: "..Executor}) end })
 
--- ============================================================================
--- 2. PLAYER TAB
--- ============================================================================
+-- 2. INFO (Pindah ke bawah Main)
+local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold" })
+InfoTab:Section({ Title = "Script Information" })
+InfoTab:Section({ Title = "Version: " .. ScriptVersion })
+InfoTab:Section({ Title = "Developer: Alfer1427" })
+InfoTab:Section({ Title = "Team: DapzX Team & ATMC" })
+
+-- 3. PLAYER
 local PlayerTab = Window:Tab({ Title = "Player", Icon = "solar:user-rounded-bold" })
-PlayerTab:Dropdown({
-    Title = "Movement & Survival",
-    Values = {"Toggle Walk on Water", "Toggle Anti Drown", "Toggle Anti AFK"},
-    Callback = function(v)
-        if v == "Toggle Walk on Water" then _G.WalkOnWater = not _G.WalkOnWater
-        elseif v == "Toggle Anti Drown" then _G.AntiDrown = not _G.AntiDrown
-        elseif v == "Toggle Anti AFK" then _G.AntiAFK = not _G.AntiAFK
-        end
-        WindUI:Notify({Title = "Player", Content = v .. " Status Updated"})
-    end
-})
+PlayerTab:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WalkOnWater = v end })
+PlayerTab:Toggle({ Title = "Anti Drown", Callback = function(v) _G.AntiDrown = v end })
+PlayerTab:Toggle({ Title = "Anti AFK", Callback = function(v) _G.AntiAFK = v end })
 
--- ============================================================================
--- 3. FISHING TAB
--- ============================================================================
+-- 4. FISHING
 local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
-FishingTab:Dropdown({
-    Title = "Auto Farming",
-    Values = {"Toggle Auto Farm", "Toggle Auto Sell"},
-    Callback = function(v)
-        if v == "Toggle Auto Farm" then _G.FarmingActive = not _G.FarmingActive
-        elseif v == "Toggle Auto Sell" then _G.AutoSellActive = not _G.AutoSellActive
-        end
-    end
-})
+FishingTab:Toggle({ Title = "Auto Farm (Classic)", Callback = function(v) _G.FarmingActive = v end })
+FishingTab:Toggle({ Title = "Auto Sell", Callback = function(v) _G.AutoSellActive = v end })
 FishingTab:Input({ Title = "Fishing Delay", Placeholder = "3.0", Callback = function(v) _G.MinigameDelay = tonumber(v) or 3.0 end })
 
--- ============================================================================
--- 4. TELEPORT TAB
--- ============================================================================
+-- 5. TELEPORT
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
-TeleportTab:Dropdown({
-    Title = "Island Destinations",
-    Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ", "Megalodon Zone"},
+TeleportTab:Dropdown({ 
+    Title = "Select Island", 
+    Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ"}, 
     Callback = function(v)
-        local locs = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Pulau Criystializ"] = Vector3.new(203, 13, -2614), ["Megalodon Zone"] = Vector3.new(3125, 10, -1713)}
+        local locs = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Pulau Criystializ"] = Vector3.new(203, 13, -2614)}
         if locs[v] then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(locs[v] + Vector3.new(0,5,0)) end
-    end
+    end 
+})
+TeleportTab:Dropdown({ 
+    Title = "Teleport to Player", 
+    Values = (function() local t = {} for _,p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then table.insert(t, p.Name) end end return t end)(), 
+    Callback = function(v)
+        local target = Players:FindFirstChild(v)
+        if target and target.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame end
+    end 
 })
 
--- ============================================================================
--- 5. WEBHOOK TAB
--- ============================================================================
+-- 6. WEBHOOK
 local WebhookTab = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold" })
 WebhookTab:Input({ Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end })
-WebhookTab:Dropdown({
-    Title = "Rarity Filters",
-    Values = {"Common Only", "Uncommon Only", "Rare & Above", "Legendary Only", "Reset All"},
-    Callback = function(v)
-        if v == "Reset All" then _G.WebhookFilters = {Common = true, Uncommon = true, Rare = true, Epic = true, Legendary = true} end
-        WindUI:Notify({Title = "Webhook", Content = "Filter set to: " .. v})
-    end
-})
+WebhookTab:Section({ Title = "Rarity Filter" })
+for i, _ in pairs(_G.Filters) do
+    WebhookTab:Toggle({ Title = "Filter: "..i, Value = true, Callback = function(v) _G.Filters[i] = v end })
+end
 
--- ============================================================================
--- 6. SHOP TAB
--- ============================================================================
+-- 7. SHOP
 local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:cart-bold" })
-ShopTab:Dropdown({
-    Title = "Automated Store",
-    Values = {"Buy Best Rod", "Buy Bait", "Gift to Friend"},
-    Callback = function(v)
-        WindUI:Notify({Title = "Shop", Content = "Requesting: " .. v})
-    end
-})
+ShopTab:Input({ Title = "Buy Item Name", Callback = function(v) end })
+ShopTab:Button({ Title = "Buy Best Fishing Rod", Callback = function() end })
 
--- ============================================================================
--- 7. UTILITIES TAB
--- ============================================================================
+-- 8. UTILITIES
 local UtilTab = Window:Tab({ Title = "Utilities", Icon = "solar:shield-check-bold" })
-UtilTab:Dropdown({
-    Title = "Special Features",
-    Values = {"Toggle Streamer Mode", "Clear Notifications"},
-    Callback = function(v)
-        if v == "Toggle Streamer Mode" then _G.StreamerMode = not _G.StreamerMode end
-    end
-})
+UtilTab:Toggle({ Title = "Streamer Mode", Callback = function(v) _G.StreamerMode = v end })
+UtilTab:Button({ Title = "Re-join Server", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) end })
 
--- ============================================================================
--- 8. PERFORMANCE TAB
--- ============================================================================
+-- 9. PERFORMANCE
 local PerfTab = Window:Tab({ Title = "Performance", Icon = "solar:monitor-camera-bold" })
-PerfTab:Dropdown({
-    Title = "Lag Reducer",
-    Values = {"Low Graphics", "Remove Decals", "FPS Boost"},
-    Callback = function(v)
-        if v == "FPS Boost" or v == "Low Graphics" then
-            for _, o in pairs(game:GetDescendants()) do
-                if o:IsA("BasePart") then o.Material = Enum.Material.SmoothPlastic o.CastShadow = false
-                elseif o:IsA("Decal") or o:IsA("ParticleEmitter") then o:Destroy() end
-            end
-        end
-    end
-})
+PerfTab:Button({ Title = "FPS Boost (Aggressive)", Callback = function() 
+    for _,v in pairs(game:GetDescendants()) do 
+        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic v.CastShadow = false
+        elseif v:IsA("Decal") or v:IsA("Texture") then v:Destroy() end
+    end 
+end })
 
--- ============================================================================
--- 9. INFO TAB
--- ============================================================================
-local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold" })
-InfoTab:Dropdown({
-    Title = "Script Status",
-    Values = {"Version: "..ScriptVersion, "Developer: Alfer1427", "Team: DapzX"},
-    Callback = function() end
-})
-
--- ============================================================================
--- CORE LOGIC LOOPS (A, B, C & AFK)
--- ============================================================================
-
--- Walk on Water Part
-local WoW = Instance.new("Part", workspace)
-WoW.Size = Vector3.new(50, 1, 50)
-WoW.Anchored, WoW.Transparency, WoW.CanCollide = true, 1, false
-
+-- [ CORE BACKGROUND LOOP ]
 task.spawn(function()
+    local WoW = Instance.new("Part", workspace)
+    WoW.Size = Vector3.new(30, 1, 30)
+    WoW.Anchored, WoW.Transparency, WoW.CanCollide = true, 1, false
+    
     local VU = game:GetService("VirtualUser")
+    
     while task.wait(0.5) do
         local char = LocalPlayer.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
-            -- A. Streamer Mode
+            -- Streamer Fix
             if _G.StreamerMode then
                 char.Humanoid.DisplayName = "Streamer"
                 for _, p in pairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then p.Character.Humanoid.DisplayName = "Player" end
                 end
             end
-
-            -- B. Anti Drown
+            -- Anti Drown Fix
             if _G.AntiDrown then
                 local ox = char:FindFirstChild("Oxygen") or char:FindFirstChild("Breath")
                 if ox then ox.Value = 100 end
             end
-
-            -- C. Walk on Water
+            -- WoW Fix
             if _G.WalkOnWater then
                 WoW.CanCollide = true
                 WoW.CFrame = CFrame.new(char.HumanoidRootPart.Position.X, 13.8, char.HumanoidRootPart.Position.Z)
             else
                 WoW.CanCollide = false
             end
-
-            -- D. Anti AFK
+            -- Anti AFK Fix
             if _G.AntiAFK then
                 VU:CaptureController()
                 VU:ClickButton2(Vector2.new())
@@ -205,11 +143,10 @@ task.spawn(function()
     end
 end)
 
--- [FARMING LOOP - ORIGINAL METHOD]
+-- [ FISHING & AUTO SELL ]
 task.spawn(function()
     local FS = ReplicatedStorage:WaitForChild("FishingSystem", 10)
-    while true do
-        task.wait(0.5)
+    while task.wait(0.5) do
         if _G.FarmingActive and FS then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -226,7 +163,6 @@ task.spawn(function()
                 end
             end)
         end
-        -- Auto Sell Logic
         if _G.AutoSellActive and FS then
             local sell = FS:FindFirstChild("SellFish")
             if sell then sell:FireServer("SellAllBatch", LocalPlayer.Backpack:GetChildren()) end
@@ -234,4 +170,4 @@ task.spawn(function()
     end
 end)
 
-WindUI:Notify({Title = "DapzX Atomic", Content = "Script Fully Restored!", Duration = 5})
+WindUI:Notify({Title = "DapzX Atomic", Content = "v14.0.9 Loaded!", Duration = 3})
