@@ -107,7 +107,7 @@ local Islands = {
 -- ============================================================================
 local Window = WindUI:CreateWindow({
     Title = "DapzX Atomic | Fishzar",
-    Author = "by Alfer1427",
+    Author = "by ...",
     Folder = "dapzxatomic",
     Icon = "solar:atom-bold",
     NewElements = true,
@@ -141,7 +141,7 @@ local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold", Ic
 local InfoSection = InfoTab:Section({ Title = "Latest Update: " .. ScriptVersion })
 
 InfoSection:Section({
-    Title = "Recode Total by Alfer1427 (TheoXAtomic)\n\n" ..
+    Title = "Recode Total by TheoXAtomic\n\n" ..
             "OPTIMASI SISTEM:\n" ..
             "- Modular Architecture: Fitur berjalan mandiri.\n" ..
             "- Performance Boost: Fix Ping & FPS counter freeze.\n" ..
