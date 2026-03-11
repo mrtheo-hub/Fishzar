@@ -5,51 +5,17 @@ local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 local Stats = game:GetService("Stats")
 
-local ScriptVersion = "v14.0.4 | FINAL FIX"
+-- [1] DETEKSI EXECUTOR & VERSI
+local Executor = (identifyexecutor and identifyexecutor()) or "Unknown PC/Mobile"
+local Version = "v14.0.6 | ATOMIC"
+local Developer = "Alfer1427"
 
--- ============================================================================
--- PING & FPS OVERLAY
--- ============================================================================
-local StatsGui = Instance.new("ScreenGui")
-StatsGui.Name = "DapzXStats_v4"
-StatsGui.ResetOnSpawn = false
-StatsGui.Parent = game:GetService("CoreGui")
+-- CLEANUP UI LAMA
+for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
+    if v.Name == "WindUI" or v.Name == "DapzXStats_v6" then v:Destroy() end
+end
 
-local StatsFrame = Instance.new("Frame")
-StatsFrame.Size = UDim2.new(0, 160, 0, 30)
-StatsFrame.Position = UDim2.new(0.5, -80, 0, 50)
-StatsFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-StatsFrame.BackgroundTransparency = 0.4
-StatsFrame.Draggable = true
-StatsFrame.Active = true
-StatsFrame.Parent = StatsGui
-Instance.new("UICorner", StatsFrame).CornerRadius = UDim.new(0, 4)
-
-local DisplayText = Instance.new("TextLabel")
-DisplayText.Size = UDim2.new(1, 0, 1, 0)
-DisplayText.BackgroundTransparency = 1
-DisplayText.TextColor3 = Color3.fromRGB(255, 255, 255)
-DisplayText.Font = Enum.Font.Code
-DisplayText.TextSize = 12
-DisplayText.Parent = StatsFrame
-
-task.spawn(function()
-    local lastUpdate = tick()
-    local frames = 0
-    RunService.RenderStepped:Connect(function()
-        frames = frames + 1
-        if tick() - lastUpdate >= 1 then
-            local ping = math.round(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-            DisplayText.Text = string.format("FPS: %d | Ping: %dms", frames, ping)
-            frames = 0
-            lastUpdate = tick()
-        end
-    end)
-end)
-
--- ============================================================================
--- WINDUI LOAD
--- ============================================================================
+-- [2] WINDUI INITIALIZATION
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
 _G.FarmingActive = false
@@ -60,140 +26,131 @@ _G.StreamerMode = false
 _G.MinigameDelay = 3.0
 _G.WebhookURL = ""
 
-local Islands = {
-    ["Pulau Nelayan"] = Vector3.new(-34.59, 14.43, 256.65),
-    ["Pulau Aquarist"] = Vector3.new(-2032.36, 12.97, -833.78),
-    ["Pulau Criystializ"] = Vector3.new(203.47, 13.09, -2614.84),
-    ["Megalodon Zone"] = Vector3.new(3125.59, 9.58, -1713.42)
-}
-
 local Window = WindUI:CreateWindow({
     Title = "DapzX Atomic | Fishzar",
-    Author = "by Alfer1427",
+    Author = "by " .. Developer,
     Icon = "solar:atom-bold",
     Size = UDim2.fromOffset(580, 460)
 })
 
--- TABS DEFINITION
+-- [3] MENAMPILKAN TAG EXECUTOR & VERSI (DI SINI!)
+Window:Tag({ 
+    Title = Executor .. " | " .. Version, 
+    Color = Color3.fromHex("#00B4D8") 
+})
+
+-- [4] SEMUA 9 TAB (DIJAMIN MUNCUL)
 local MainTab = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
+local InfoTab = Window:Tab({ Title = "Info", Icon = "solar:info-square-bold" })
 local PlayerTab = Window:Tab({ Title = "Player", Icon = "solar:user-rounded-bold" })
 local FishingTab = Window:Tab({ Title = "Fishing", Icon = "solar:cursor-square-bold" })
 local TeleportTab = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
 local WebhookTab = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold" })
+local ShopTab = Window:Tab({ Title = "Shop", Icon = "solar:cart-bold" })
 local UtilTab = Window:Tab({ Title = "Utilities", Icon = "solar:shield-check-bold" })
 local PerfTab = Window:Tab({ Title = "Performance", Icon = "solar:monitor-camera-bold" })
 
--- 1. MAIN
-MainTab:Section({ Title = "© 2026 DapzX Team & ATMC" })
-MainTab:Button({ Title = "Join Discord (getsades)", Callback = function() setclipboard("https://discord.gg/getsades") end })
+-- --- MAIN CONTENT ---
+MainTab:Section({ Title = "Executor Info" })
+MainTab:Section({ Title = "Running on: " .. Executor, TextSize = 14 })
+MainTab:Section({ Title = "Script Version: " .. Version, TextSize = 14 })
+MainTab:Button({ Title = "Join Discord: getsades", Callback = function() setclipboard("https://discord.gg/getsades") end })
 
--- 2. PLAYER
+-- --- INFO CONTENT ---
+InfoTab:Section({ Title = "Changelog " .. Version })
+InfoTab:Section({ Title = "- DETECTED: Executor & Version visibility\n- RESTORED: All 9 Tabs\n- FIXED: Original Fishing Method (v1)\n- FIXED: Streamer Mode Persistence", TextSize = 13 })
+
+-- --- PLAYER CONTENT ---
 PlayerTab:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WalkOnWater = v end })
 PlayerTab:Toggle({ Title = "Anti Drown", Callback = function(v) _G.AntiDrown = v end })
 
--- 3. FISHING (Original Method Logic)
-FishingTab:Toggle({ Title = "Auto Farm (Classic Method)", Callback = function(v) _G.FarmingActive = v end })
+-- --- FISHING CONTENT (ORIGINAL METHOD 1) ---
+FishingTab:Toggle({ Title = "Auto Farm (Method 1)", Callback = function(v) _G.FarmingActive = v end })
 FishingTab:Input({ Title = "Minigame Delay", Placeholder = "3.0", Callback = function(v) _G.MinigameDelay = tonumber(v) or 3.0 end })
 FishingTab:Toggle({ Title = "Auto Sell", Callback = function(v) _G.AutoSellActive = v end })
 
--- 4. TELEPORT
-TeleportTab:Dropdown({ Title = "Island Teleport", Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ", "Megalodon Zone"}, Callback = function(opt) 
-    if Islands[opt] then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[opt] + Vector3.new(0,5,0)) end 
+-- --- TELEPORT CONTENT ---
+TeleportTab:Dropdown({ Title = "Island Teleport", Values = {"Pulau Nelayan", "Pulau Aquarist", "Pulau Criystializ"}, Callback = function(opt) 
+    local locs = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833), ["Pulau Criystializ"] = Vector3.new(203, 13, -2614)}
+    if locs[opt] then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(locs[opt] + Vector3.new(0,5,0)) end 
 end })
 
--- 5. WEBHOOK
+-- --- WEBHOOK CONTENT ---
 WebhookTab:Input({ Title = "Webhook URL", Callback = function(v) _G.WebhookURL = v end })
 
--- 6. UTILITIES
-UtilTab:Toggle({ Title = "Streamer Mode", Callback = function(v) _G.StreamerMode = v end })
-UtilTab:Toggle({ Title = "Show Stats", Callback = function(v) StatsGui.Enabled = v end })
+-- --- SHOP CONTENT ---
+ShopTab:Input({ Title = "Item Name", Callback = function(v) end })
 
--- 7. PERFORMANCE (The real FPS Boost)
-PerfTab:Button({ Title = "Aggressive FPS Boost", Callback = function() 
-    settings().Rendering.QualityLevel = 1
-    game.Lighting.GlobalShadows = false
+-- --- UTILITIES CONTENT ---
+UtilTab:Toggle({ Title = "Streamer Mode", Callback = function(v) _G.StreamerMode = v end })
+
+-- --- PERFORMANCE CONTENT ---
+PerfTab:Button({ Title = "FPS Boost", Callback = function() 
     for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("Part") or v:IsA("MeshPart") then
-            v.Material = Enum.Material.SmoothPlastic
-            v.CastShadow = false
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v:Destroy()
-        elseif v:IsA("Atmosphere") or v:IsA("Clouds") or v:IsA("SunRaysEffect") then
-            v:Destroy()
-        end
+        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic v.CastShadow = false end
     end
-    WindUI:Notify({Title = "Performance", Content = "Graphics Optimized!", Duration = 3})
 end })
 
--- ============================================================================
--- LOGIC LOOPS
--- ============================================================================
-
+-- [5] BACKGROUND LOGIC (STREAMER, WATER, ANTI-DROWN)
 task.spawn(function()
     local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
     
+    -- WoW Platform
+    local WoW = Instance.new("Part", workspace)
+    WoW.Size = Vector3.new(30, 1, 30)
+    WoW.Anchored, WoW.Transparency, WoW.CanCollide = true, 1, false
+
     while true do
         task.wait(0.1)
-        
-        -- ORIGINAL FISHING LOGIC
-        if _G.FarmingActive and FishingSystem then
-            pcall(function()
-                local char = LocalPlayer.Character
-                local rod = char:FindFirstChildWhichIsA("Tool")
-                if char and rod then
-                    local root = char.HumanoidRootPart
-                    local castPos = root.Position + (root.CFrame.LookVector * 15)
-                    
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, rod.Name, 100)
-                    task.wait(2)
-                    FishingSystem.PrecalcFish:InvokeServer()
-                    task.wait(_G.MinigameDelay)
-                    FishingSystem.FishGiver:FireServer({["hookPosition"] = castPos})
-                    FishingSystem.CleanupCast:FireServer()
-                    task.wait(1)
-                end
-            end)
-        end
-
-        -- STREAMER MODE
-        if _G.StreamerMode then
-            pcall(function()
-                LocalPlayer.Character.Humanoid.DisplayName = "Streamer"
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            -- Streamer Mode (Aggressive)
+            if _G.StreamerMode then
+                char.Humanoid.DisplayName = "Streamer"
                 for _, p in pairs(Players:GetPlayers()) do
-                    if p ~= LocalPlayer and p.Character then
-                        p.Character.Humanoid.DisplayName = "Player"
-                        for _, bg in pairs(p.Character:GetDescendants()) do
-                            if bg:IsA("BillboardGui") then bg.Enabled = false end
-                        end
-                    end
+                    if p ~= LocalPlayer and p.Character then p.Character.Humanoid.DisplayName = "Player" end
                 end
-            end)
-        end
-
-        -- ANTI DROWN
-        if _G.AntiDrown and LocalPlayer.Character then
-            local ox = LocalPlayer.Character:FindFirstChild("Oxygen") or LocalPlayer.Character:FindFirstChild("Breath")
-            if ox then ox.Value = 100 end
-            for _, s in pairs(LocalPlayer.Character:GetDescendants()) do
-                if s:IsA("LocalScript") and s.Name:lower():find("drown") then s.Disabled = true end
             end
-        end
-
-        -- WALK ON WATER (Velocity Logic)
-        if _G.WalkOnWater and LocalPlayer.Character then
-            local hrp = LocalPlayer.Character.HumanoidRootPart
-            if hrp.Position.Y < 15 and hrp.Position.Y > 10 then -- Deteksi level air
-                local bv = hrp:FindFirstChild("DapzX_Float") or Instance.new("BodyVelocity", hrp)
-                bv.Name = "DapzX_Float"
-                bv.Velocity = Vector3.new(0, 0, 0)
-                bv.MaxForce = Vector3.new(0, 5000, 0) -- Hanya menahan sumbu Y
+            
+            -- Walk on Water
+            if _G.WalkOnWater then
+                WoW.CanCollide = true
+                WoW.CFrame = CFrame.new(char.HumanoidRootPart.Position.X, 13.8, char.HumanoidRootPart.Position.Z)
+            else
+                WoW.CanCollide = false
             end
-        else
-            if LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart:FindFirstChild("DapzX_Float") then
-                LocalPlayer.Character.HumanoidRootPart.DapzX_Float:Destroy()
+
+            -- Anti Drown
+            if _G.AntiDrown then
+                local ox = char:FindFirstChild("Oxygen") or char:FindFirstChild("Breath")
+                if ox then ox.Value = 100 end
             end
         end
     end
 end)
 
-print("✅ DapzX Atomic " .. ScriptVersion .. " Ready!")
+-- [6] AUTO FARM LOOP (ORIGINAL METHOD 1)
+task.spawn(function()
+    local FS = ReplicatedStorage:WaitForChild("FishingSystem", 5)
+    while true do
+        task.wait(0.5)
+        if _G.FarmingActive and FS then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local rod = char:FindFirstChildWhichIsA("Tool")
+                if rod then
+                    local root = char.HumanoidRootPart
+                    local castPos = root.Position + (root.CFrame.LookVector * 15)
+                    FS.CastReplication:FireServer(castPos, root.Position, rod.Name, 100)
+                    task.wait(2)
+                    FS.PrecalcFish:InvokeServer()
+                    task.wait(_G.MinigameDelay)
+                    FS.FishGiver:FireServer({["hookPosition"] = castPos})
+                    FS.CleanupCast:FireServer()
+                end
+            end)
+        end
+    end
+end)
+
+WindUI:Notify({ Title = "DapzX Atomic Loaded", Content = "Running on " .. Executor, Duration = 5 })
