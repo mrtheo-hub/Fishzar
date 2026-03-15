@@ -1,5 +1,5 @@
--- [[ FLOW HUB | ATOMIC FINAL FIX V1.7.0 ]]
--- Author: Atomic Community (Dapz, Theo, Mon)
+-- [[ FLOW HUB OFFICIAL V1.8.0 ]]
+-- Pure Edition | No External Affiliations
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -7,129 +7,111 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
 local ValidKeys = {"FlowHub", "Dapz", "Mon", "Theo"}
-local KeyFile = "Atomic_Secure_V17.txt"
+local KeyFile = "FlowHub_Data.txt"
 
 -- Utils
 local function SaveK(k) writefile(KeyFile, k) end
 local function ReadK() return isfile(KeyFile) and readfile(KeyFile) or "" end
 
--- ==========================================
--- 1. CLEANING PREVIOUS BUGS
--- ==========================================
+-- Cleanup
 for _, v in pairs(CoreGui:GetChildren()) do
-    if v.Name == "Atomic_System" or v.Name == "WindUI" then v:Destroy() end
+    if v.Name == "FlowHub_System" or v.Name == "WindUI" then v:Destroy() end
 end
 
 -- ==========================================
--- 2. PROFESSIONAL KEY & LOADING SYSTEM
+-- 1. FLOW HUB AUTH SYSTEM
 -- ==========================================
 local Screen = Instance.new("ScreenGui", CoreGui)
-Screen.Name = "Atomic_System"
+Screen.Name = "FlowHub_System"
 Screen.DisplayOrder = 99999
 
 local Background = Instance.new("Frame", Screen)
 Background.Size = UDim2.new(1, 0, 1, 0)
-Background.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Background.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 Background.BorderSizePixel = 0
 
 local MainContent = Instance.new("Frame", Background)
-MainContent.Size = UDim2.fromOffset(380, 420)
-MainContent.Position = UDim2.new(0.5, -190, 0.5, -210)
+MainContent.Size = UDim2.fromOffset(350, 400)
+MainContent.Position = UDim2.new(0.5, -175, 0.5, -200)
 MainContent.BackgroundTransparency = 1
 
 local Logo = Instance.new("ImageLabel", MainContent)
-Logo.Size = UDim2.fromOffset(120, 120)
-Logo.Position = UDim2.new(0.5, -60, 0, 0)
-Logo.Image = "rbxassetid://88673887911141" -- Logo Atomic
+Logo.Size = UDim2.fromOffset(130, 130)
+Logo.Position = UDim2.new(0.5, -65, 0, 10)
+Logo.Image = "rbxassetid://88673887911141" -- Flow Hub Logo
 Logo.BackgroundTransparency = 1
 
-local BarBG = Instance.new("Frame", MainContent)
-BarBG.Size = UDim2.new(0.8, 0, 0, 4)
-BarBG.Position = UDim2.new(0.1, 0, 0.35, 0)
-BarBG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-BarBG.BorderSizePixel = 0
-local Bar = Instance.new("Frame", BarBG)
-Bar.Size = UDim2.new(0, 0, 1, 0)
-Bar.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-Bar.BorderSizePixel = 0
+local LoadingText = Instance.new("TextLabel", MainContent)
+LoadingText.Size = UDim2.new(1, 0, 0, 30)
+LoadingText.Position = UDim2.new(0, 0, 0.4, 0)
+LoadingText.Text = "LOADING FLOW HUB..."
+LoadingText.TextColor3 = Color3.new(1, 1, 1)
+LoadingText.Font = Enum.Font.GothamBold
+LoadingText.TextSize = 16
+LoadingText.BackgroundTransparency = 1
 
 local KeyFrame = Instance.new("Frame", MainContent)
-KeyFrame.Size = UDim2.new(1, 0, 0.5, 0)
-KeyFrame.Position = UDim2.new(0, 0, 0.45, 0)
+KeyFrame.Size = UDim2.new(1, 0, 0.4, 0)
+KeyFrame.Position = UDim2.new(0, 0, 0.5, 0)
 KeyFrame.BackgroundTransparency = 1
 KeyFrame.Visible = false
 
 local Input = Instance.new("TextBox", KeyFrame)
-Input.Size = UDim2.new(0.9, 0, 0, 45)
-Input.Position = UDim2.new(0.05, 0, 0.1, 0)
-Input.PlaceholderText = "ENTER ATOMIC KEY..."
-Input.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Input.TextColor3 = Color3.new(1,1,1)
+Input.Size = UDim2.new(1, 0, 0, 45)
+Input.Position = UDim2.new(0, 0, 0, 0)
+Input.PlaceholderText = "ENTER KEY..."
+Input.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Input.TextColor3 = Color3.new(1, 1, 1)
 Input.Font = Enum.Font.GothamBold
-Input.TextSize = 14
-Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 8)
-Instance.new("UIStroke", Input).Color = Color3.fromRGB(0, 180, 216)
+Instance.new("UICorner", Input)
 
 local Btn = Instance.new("TextButton", KeyFrame)
-Btn.Size = UDim2.new(0.9, 0, 0, 45)
-Btn.Position = UDim2.new(0.05, 0, 0.4, 0)
+Btn.Size = UDim2.new(1, 0, 0, 45)
+Btn.Position = UDim2.new(0, 0, 0.3, 20)
 Btn.Text = "AUTHENTICATE"
 Btn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-Btn.TextColor3 = Color3.new(1,1,1)
+Btn.TextColor3 = Color3.new(1, 1, 1)
 Btn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", Btn)
 
 -- ==========================================
--- 3. ANIMATION LOGIC
+-- 2. TRANSITION LOGIC
 -- ==========================================
-task.spawn(function()
-    -- Loading Bar Animation
-    for i = 1, 100 do
-        Bar.Size = UDim2.new(i/100, 0, 1, 0)
-        task.wait(0.02)
-    end
+local function SuccessAuth()
+    LoadingText.Text = "ACCESS GRANTED"
+    LoadingText.TextColor3 = Color3.new(0, 1, 0)
+    KeyFrame:Destroy()
     task.wait(0.5)
-    BarBG:Destroy()
-    
-    -- Show Key System
+    Screen:Destroy() -- Langsung hapus screen agar tidak stuck
+    ExecuteFlowHub()
+end
+
+task.spawn(function()
+    task.wait(2) -- Loading simulasi
+    LoadingText.Visible = false
     KeyFrame.Visible = true
     
-    -- Auto-Login Check
     local saved = ReadK()
     if table.find(ValidKeys, saved) then
         Input.Text = saved
-        Btn.Text = "KEY SAVED! LOGGING IN..."
-        task.wait(1)
         SuccessAuth()
     end
 end)
 
 Btn.MouseButton1Click:Connect(function()
-    local userKey = Input.Text
-    if table.find(ValidKeys, userKey) then
-        SaveK(userKey)
+    if table.find(ValidKeys, Input.Text) then
+        SaveK(Input.Text)
         SuccessAuth()
     else
-        LocalPlayer:Kick("Flow Hub: WRONG KEY DETECTED. Re-execute and use the correct key.")
+        LocalPlayer:Kick("Flow Hub: Invalid Key.")
     end
 end)
 
-function SuccessAuth()
-    -- Fade out
-    TweenService:Create(Background, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(MainContent, TweenInfo.new(0.5), {GroupTransparency = 1}):Play()
-    task.wait(1)
-    Screen:Destroy()
-    
-    -- START REAL UI (NO BUGS)
-    ExecuteFlowHub()
-end
-
 -- ==========================================
--- 4. MAIN SCRIPT (AFTER KEY)
+-- 3. MAIN SCRIPT (FLOW HUB INTERFACE)
 -- ==========================================
 function ExecuteFlowHub()
-    -- LOAD FISHZAR (NO RECODE)
+    -- LOAD EXTERNAL (FISHZAR)
     task.spawn(function()
         pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
@@ -138,10 +120,10 @@ function ExecuteFlowHub()
 
     local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
     local Window = WindUI:CreateWindow({
-        Title = "Flow Hub | Atomic V1.7",
-        Folder = "FlowHubV17",
+        Title = "Flow Hub | Official V1.8",
+        Folder = "FlowHubV18",
         Icon = "solar:waterdrop-bold",
-        Size = UDim2.fromOffset(600, 480),
+        Size = UDim2.fromOffset(580, 460),
         Search = true
     })
 
@@ -151,8 +133,25 @@ function ExecuteFlowHub()
         Util = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
     }
 
-    Tabs.Main:Section({ Title = "Status: Authenticated" })
-    Tabs.Main:Section({ Title = "• Fixed: Ghost UI Bug (Video Fix)\n• Fixed: Logo Visibility\n• Added: Auto-Kick on Wrong Key", TextSize = 12 })
+    Tabs.Main:Section({ Title = "Welcome to Flow Hub" })
+    Tabs.Main:Section({ Title = "• Fixed: Logo & Auth Stuck\n• Fixed: Sequential Logic\n• Integrated: Fishzar Loadstring", TextSize = 12 })
     
-    -- (Sisa fitur teleport, walkwater, dll dilanjutkan di sini sesuai kebutuhan)
+    -- Contoh fitur teleport yang diperbarui
+    local Islands = {
+        ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706),
+        ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
+        ["Pedalaman Posei"] = Vector3.new(-861, -367, -1283)
+    }
+    
+    local names = {} for k,v in pairs(Islands) do table.insert(names, k) end
+    
+    Tabs.Tele:Dropdown({
+        Title = "Teleport Area",
+        Values = names,
+        Callback = function(v) 
+            if LocalPlayer.Character then 
+                LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v]) 
+            end 
+        end
+    })
 end
