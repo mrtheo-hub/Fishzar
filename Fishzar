@@ -1,5 +1,6 @@
--- [[ FLOW HUB OFFICIAL V2.6.0 ]]
--- CORE FIX: INSTANT UI RENDERING
+-- [[ FLOW HUB OFFICIAL V1.0.0 ]]
+-- Final Stable Release | Pure Edition
+-- No Key | No Loading | Logic Fixed
 
 if getgenv().FlowHubRunning then return end
 getgenv().FlowHubRunning = true
@@ -7,77 +8,194 @@ getgenv().FlowHubRunning = true
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 
--- 1. CLEANUP (Hapus UI lama agar bersih)
+-- 1. CLEANUP & INITIALIZATION
 for _, v in pairs(CoreGui:GetChildren()) do
     if v.Name == "WindUI" then v:Destroy() end
 end
 
--- 2. LOAD WINDUI LIBRARY
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-
--- 3. CREATE WINDOW SEKALIGUS (TANPA JEDA)
 local Window = WindUI:CreateWindow({
-    Title = "Flow Hub Official",
-    Icon = "image", -- Fallback icon aman
-    Folder = "FlowHub_Data",
+    Title = "Flow Hub | V1.0.0",
+    Icon = "solar:waterdrop-bold",
+    Folder = "FlowHub_Official",
     Size = UDim2.fromOffset(580, 460),
     Transparent = false,
-    Theme = "Dark"
+    Search = true -- [FIX: Fitur Search Aktif]
 })
 
-Window:Tag({ Title = "Stable Build", Color = Color3.fromRGB(0, 180, 216) })
+local Executor = (identifyexecutor and identifyexecutor()) or "Unknown"
+Window:Tag({ Title = "Exec: " .. Executor, Color = Color3.fromRGB(0, 180, 216) })
+Window:Tag({ Title = "Ver: 1.0.0", Color = Color3.new(1,1,1) })
 
 -- ==========================================
--- 4. BUILD TABS & ELEMENTS INSTANTLY
+-- 2. TAB: MAIN
 -- ==========================================
--- Tab Main
-local TabMain = Window:Tab({ Title = "Main", Icon = "home" })
-TabMain:Section({ Title = "Profile" })
+local TabMain = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
+
+TabMain:Section({ Title = "Release Information" })
+TabMain:Section({ Title = "- Official Release V1.0.0\n- High Performance & Stable\n- Anti-Drown & WoW Patched\n- Auto Sell Logic Included", TextSize = 12 })
+
 TabMain:Button({ 
-    Title = "Copy Discord Link", 
-    Callback = function() setclipboard("https://discord.gg/flowhub") end 
-})
-
--- Tab Teleport
-local TabTele = Window:Tab({ Title = "Teleport", Icon = "map" })
-local Locs = {
-    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256), 
-    ["Gua Crystaliz"] = Vector3.new(171, -142, -4938)
-}
-local list = {} for k,_ in pairs(Locs) do table.insert(list, k) end
-
-TabTele:Dropdown({ 
-    Title = "Select Destination", 
-    Values = list, 
-    Callback = function(v) 
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locs[v]) 
+    Title = "Enable Performance Mode", 
+    Callback = function() 
+        settings().Rendering.QualityLevel = 1
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("BasePart") and not v.Parent:FindFirstChild("Humanoid") then
+                v.Material = Enum.Material.SmoothPlastic
+            end
         end
+        Window:Notify({Title = "Performance", Content = "Graphics Optimized", Duration = 2})
     end 
 })
 
--- Tab Utilities
-local TabUtil = Window:Tab({ Title = "Utilities", Icon = "settings" })
-TabUtil:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WoW = v end })
-TabUtil:Button({ Title = "Rejoin Server", Callback = function() 
-    game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) 
-end})
+-- ==========================================
+-- 3. TAB: FISHING
+-- ==========================================
+local TabFish = Window:Tab({ Title = "Fishing", Icon = "solar:fishing-bold" })
+
+TabFish:Toggle({
+    Title = "Auto Sell Fish",
+    Callback = function(v)
+        getgenv().AutoSell = v
+        task.spawn(function()
+            while getgenv().AutoSell do
+                pcall(function()
+                    for _, prompt in pairs(workspace:GetDescendants()) do
+                        if prompt:IsA("ProximityPrompt") and (prompt.ActionText:lower():match("sell") or prompt.ObjectText:lower():match("sell")) then
+                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                                LocalPlayer.Character.HumanoidRootPart.CFrame = prompt.Parent.CFrame
+                                task.wait(0.5)
+                                fireproximityprompt(prompt)
+                            end
+                        end
+                    end
+                end)
+                task.wait(3)
+            end
+        end)
+    end
+})
+
+local PingLabel = TabFish:Section({ Title = "Ping: Fetching..." })
+local FPSLabel = TabFish:Section({ Title = "FPS: Fetching..." })
+
+task.spawn(function()
+    while task.wait(0.1) do -- [FIX: Update Stats 0.1 Detik]
+        pcall(function()
+            local fps = math.floor(1/RunService.RenderStepped:Wait())
+            local ping = tonumber(string.format("%.0f", game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()))
+            PingLabel:SetTitle("Ping: " .. ping .. " ms")
+            FPSLabel:SetTitle("FPS: " .. fps)
+        end)
+    end
+end)
 
 -- ==========================================
--- 5. LOAD FISHZAR DI BACKGROUND (PALING AKHIR)
+-- 4. TAB: TELEPORT
 -- ==========================================
-Window:Notify({ 
-    Title = "Flow Hub", 
-    Content = "Loading Fishzar Script...", 
-    Duration = 3 
+local TabTele = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
+
+local Locations = { -- [FIX: Koordinat Terbaru]
+    ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706),
+    ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
+    ["Pedalaman Posei"] = Vector3.new(-861, -367, -1283),
+    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256)
+}
+local locNames = {} for k,_ in pairs(Locations) do table.insert(locNames, k) end
+
+TabTele:Dropdown({
+    Title = "Select Island",
+    Values = locNames,
+    Callback = function(v)
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locations[v])
+        end
+    end
 })
+
+-- ==========================================
+-- 5. TAB: UTILITIES
+-- ==========================================
+local TabUtil = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
+
+getgenv().StreamerMode = false
+TabUtil:Toggle({
+    Title = "Streamer Mode",
+    Callback = function(v)
+        getgenv().StreamerMode = v
+        task.spawn(function()
+            while getgenv().StreamerMode do
+                pcall(function()
+                    local char = LocalPlayer.Character
+                    if char then
+                        local tag = char:FindFirstChild("NameLabel", true) or char:FindFirstChild("namelabel", true)
+                        if tag and tag.Visible then tag.Visible = false end
+                    end
+                end)
+                task.wait(1)
+            end
+        end)
+    end
+})
+
+local waterPlatform
+TabUtil:Toggle({ -- [FIX: Dynamic Height WoW]
+    Title = "Walk on Water",
+    Callback = function(v)
+        getgenv().WoW = v
+        if v then
+            if not waterPlatform then
+                waterPlatform = Instance.new("Part", workspace)
+                waterPlatform.Name = "FlowHub_Water"
+                waterPlatform.Size = Vector3.new(500, 1, 500)
+                waterPlatform.Transparency = 1
+                waterPlatform.Anchored = true
+            end
+            local lockY = 0
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                lockY = LocalPlayer.Character.HumanoidRootPart.Position.Y - 3.5
+            end
+            task.spawn(function()
+                while getgenv().WoW do
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                        waterPlatform.Position = Vector3.new(LocalPlayer.Character.HumanoidRootPart.Position.X, lockY, LocalPlayer.Character.HumanoidRootPart.Position.Z)
+                    end
+                    task.wait()
+                end
+            end)
+        else
+            if waterPlatform then waterPlatform:Destroy() waterPlatform = nil end
+        end
+    end
+})
+
+TabUtil:Toggle({ -- [FIX: Health-based Anti Drown]
+    Title = "Anti Drown",
+    Callback = function(v)
+        getgenv().AntiDrown = v
+        task.spawn(function()
+            while getgenv().AntiDrown do
+                pcall(function()
+                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+                    if hum and hum:GetState() == Enum.HumanoidStateType.Swimming then
+                        if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
+                    end
+                end)
+                task.wait(0.5)
+            end
+        end)
+    end
+})
+
+-- ==========================================
+-- 6. FINAL NOTIFY
+-- ==========================================
+Window:Notify({ Title = "Flow Hub", Content = "Official V1.0.0 Loaded", Duration = 3 })
 
 task.spawn(function()
     pcall(function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
     end)
 end)
-
--- Reset flag saat UI ditutup (Opsional, tergantung behaviour WindUI)
--- getgenv().FlowHubRunning = false
