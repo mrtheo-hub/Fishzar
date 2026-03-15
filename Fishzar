@@ -1,6 +1,6 @@
 -- [[ FLOW HUB OFFICIAL V1.0.0 ]]
--- Final Stable Release | Pure Edition
--- No Key | No Loading | Logic Fixed
+-- PURE EDITION | NO ATOMIC | STABLE 1.3.0 ARCHITECTURE
+-- ALL BUGS FIXED | OFFICIAL RELEASE
 
 if getgenv().FlowHubRunning then return end
 getgenv().FlowHubRunning = true
@@ -10,7 +10,7 @@ local LocalPlayer = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 
--- 1. CLEANUP & INITIALIZATION
+-- 1. CLEANUP & WINDOW SETUP (No Delay for PC Minimize Fix)
 for _, v in pairs(CoreGui:GetChildren()) do
     if v.Name == "WindUI" then v:Destroy() end
 end
@@ -22,39 +22,57 @@ local Window = WindUI:CreateWindow({
     Folder = "FlowHub_Official",
     Size = UDim2.fromOffset(580, 460),
     Transparent = false,
-    Search = true -- [FIX: Fitur Search Aktif]
+    Search = true -- [FITUR SEARCH]
 })
 
-local Executor = (identifyexecutor and identifyexecutor()) or "Unknown"
-Window:Tag({ Title = "Exec: " .. Executor, Color = Color3.fromRGB(0, 180, 216) })
+-- DETECTOR EXECUTOR & VERSION
+local Exec = (identifyexecutor and identifyexecutor()) or "Mobile"
+Window:Tag({ Title = "Exec: " .. Exec, Color = Color3.fromRGB(0, 180, 216) })
 Window:Tag({ Title = "Ver: 1.0.0", Color = Color3.new(1,1,1) })
 
 -- ==========================================
--- 2. TAB: MAIN
+-- 2. TAB: MAIN (CHANGELOG & PERFORMANCE)
 -- ==========================================
 local TabMain = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
 
-TabMain:Section({ Title = "Release Information" })
-TabMain:Section({ Title = "- Official Release V1.0.0\n- High Performance & Stable\n- Anti-Drown & WoW Patched\n- Auto Sell Logic Included", TextSize = 12 })
+TabMain:Section({ Title = "Changelog V1.0.0" })
+TabMain:Section({ Title = "- Official Release\n- Fixed Physics (WoW & Anti-Drown)\n- Added Player & Stats Features\n- No Key / No Loading", TextSize = 12 })
 
-TabMain:Button({ 
-    Title = "Enable Performance Mode", 
+TabMain:Section({ Title = "Performance Mode" })
+TabMain:Button({ -- [PERFORMANCE AS BUTTON]
+    Title = "Ultra FPS Boost", 
     Callback = function() 
         settings().Rendering.QualityLevel = 1
         for _, v in pairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") and not v.Parent:FindFirstChild("Humanoid") then
-                v.Material = Enum.Material.SmoothPlastic
-            end
+            if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic end
+            if v:IsA("Texture") or v:IsA("Decal") then v:Destroy() end
         end
-        Window:Notify({Title = "Performance", Content = "Graphics Optimized", Duration = 2})
+        game:GetService("Lighting").GlobalShadows = false
+        Window:Notify({Title = "Performance", Content = "Optimization Applied", Duration = 2})
     end 
 })
 
 -- ==========================================
--- 3. TAB: FISHING
+-- 3. TAB: FISHING (AUTO & REALTIME STATS)
 -- ==========================================
 local TabFish = Window:Tab({ Title = "Fishing", Icon = "solar:fishing-bold" })
 
+-- [REAL TIME STATS UI]
+TabFish:Section({ Title = "Real-Time Statistics" })
+local PingLabel = TabFish:Section({ Title = "Ping: Fetching..." })
+local FPSLabel = TabFish:Section({ Title = "FPS: Fetching..." })
+
+task.spawn(function()
+    while task.wait(0.1) do
+        local fps = math.floor(1/RunService.RenderStepped:Wait())
+        local ping = tonumber(string.format("%.0f", game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()))
+        PingLabel:SetTitle("Ping: " .. ping .. " ms")
+        FPSLabel:SetTitle("FPS: " .. fps)
+    end
+end)
+
+TabFish:Section({ Title = "Automation" })
+TabFish:Toggle({ Title = "Auto Fishing", Callback = function(v) getgenv().AutoFish = v end })
 TabFish:Toggle({
     Title = "Auto Sell Fish",
     Callback = function(v)
@@ -62,140 +80,131 @@ TabFish:Toggle({
         task.spawn(function()
             while getgenv().AutoSell do
                 pcall(function()
-                    for _, prompt in pairs(workspace:GetDescendants()) do
-                        if prompt:IsA("ProximityPrompt") and (prompt.ActionText:lower():match("sell") or prompt.ObjectText:lower():match("sell")) then
-                            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                                LocalPlayer.Character.HumanoidRootPart.CFrame = prompt.Parent.CFrame
-                                task.wait(0.5)
-                                fireproximityprompt(prompt)
-                            end
+                    for _, p in pairs(workspace:GetDescendants()) do
+                        if p:IsA("ProximityPrompt") and p.ActionText:lower():match("sell") then
+                            LocalPlayer.Character.HumanoidRootPart.CFrame = p.Parent.CFrame
+                            task.wait(0.3)
+                            fireproximityprompt(p)
                         end
                     end
                 end)
-                task.wait(3)
+                task.wait(2)
             end
         end)
     end
 })
 
-local PingLabel = TabFish:Section({ Title = "Ping: Fetching..." })
-local FPSLabel = TabFish:Section({ Title = "FPS: Fetching..." })
+-- ==========================================
+-- 4. TAB: PLAYER (MOVEMENT & TELEPORT PLAYER)
+-- ==========================================
+local TabPlayer = Window:Tab({ Title = "Player", Icon = "solar:user-bold" })
 
-task.spawn(function()
-    while task.wait(0.1) do -- [FIX: Update Stats 0.1 Detik]
-        pcall(function()
-            local fps = math.floor(1/RunService.RenderStepped:Wait())
-            local ping = tonumber(string.format("%.0f", game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()))
-            PingLabel:SetTitle("Ping: " .. ping .. " ms")
-            FPSLabel:SetTitle("FPS: " .. fps)
-        end)
+TabPlayer:Section({ Title = "Movement Settings" })
+TabPlayer:Slider({ Title = "WalkSpeed", Min = 16, Max = 300, Default = 16, Callback = function(v) LocalPlayer.Character.Humanoid.WalkSpeed = v end })
+TabPlayer:Slider({ Title = "JumpPower", Min = 50, Max = 500, Default = 50, Callback = function(v) LocalPlayer.Character.Humanoid.JumpPower = v end })
+
+TabPlayer:Section({ Title = "Teleport to Player" })
+local function getPlrs()
+    local t = {}
+    for _, v in pairs(Players:GetPlayers()) do if v ~= LocalPlayer then table.insert(t, v.Name) end end
+    return t
+end
+
+local PlrDrop = TabPlayer:Dropdown({
+    Title = "Select Player",
+    Values = getPlrs(),
+    Callback = function(v)
+        local target = Players:FindFirstChild(v)
+        if target and target.Character then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+        end
     end
-end)
+})
+
+TabPlayer:Button({ Title = "Refresh Player List", Callback = function() PlrDrop:SetValues(getPlrs()) end })
 
 -- ==========================================
--- 4. TAB: TELEPORT
+-- 5. TAB: TELEPORT (UPDATED COORDS)
 -- ==========================================
 local TabTele = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
 
-local Locations = { -- [FIX: Koordinat Terbaru]
+local Locs = {
     ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706),
     ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
-    ["Pedalaman Posei"] = Vector3.new(-861, -367, -1283),
+    ["Pulau Pedalaman Posei"] = Vector3.new(-861, -367, -1283),
     ["Pulau Nelayan"] = Vector3.new(-34, 14, 256)
 }
-local locNames = {} for k,_ in pairs(Locations) do table.insert(locNames, k) end
+local names = {} for k,_ in pairs(Locs) do table.insert(names, k) end
 
-TabTele:Dropdown({
-    Title = "Select Island",
-    Values = locNames,
-    Callback = function(v)
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locations[v])
-        end
-    end
-})
+TabTele:Dropdown({ Title = "Select Island", Values = names, Callback = function(v) 
+    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locs[v]) 
+end})
 
 -- ==========================================
--- 5. TAB: UTILITIES
+-- 6. TAB: UTILITIES (PHYSICS FIX)
 -- ==========================================
 local TabUtil = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
 
-getgenv().StreamerMode = false
-TabUtil:Toggle({
-    Title = "Streamer Mode",
-    Callback = function(v)
-        getgenv().StreamerMode = v
+TabUtil:Toggle({ Title = "Streamer Mode (Hide Name)", Callback = function(v)
+    getgenv().Streamer = v
+    task.spawn(function()
+        while getgenv().Streamer do
+            pcall(function()
+                local tag = LocalPlayer.Character:FindFirstChild("NameLabel", true) or LocalPlayer.Character:FindFirstChild("namelabel", true)
+                if tag then tag.Visible = false end
+            end)
+            task.wait(1)
+        end
+    end)
+end})
+
+local waterP
+TabUtil:Toggle({ Title = "Walk on Water (Safe)", Callback = function(v)
+    getgenv().WoW = v
+    if v then
+        waterP = Instance.new("Part", workspace)
+        waterP.Name = "FlowHub_WaterPart"
+        waterP.Size = Vector3.new(2000, 1, 2000)
+        waterP.Transparency = 1
+        waterP.Anchored = true
+        local y = LocalPlayer.Character.HumanoidRootPart.Position.Y - 3.4
         task.spawn(function()
-            while getgenv().StreamerMode do
-                pcall(function()
-                    local char = LocalPlayer.Character
-                    if char then
-                        local tag = char:FindFirstChild("NameLabel", true) or char:FindFirstChild("namelabel", true)
-                        if tag and tag.Visible then tag.Visible = false end
-                    end
-                end)
-                task.wait(1)
+            while getgenv().WoW do
+                if LocalPlayer.Character then
+                    waterP.Position = Vector3.new(LocalPlayer.Character.HumanoidRootPart.Position.X, y, LocalPlayer.Character.HumanoidRootPart.Position.Z)
+                end
+                task.wait()
             end
         end)
+    else
+        if waterP then waterP:Destroy() end
     end
-})
+end})
 
-local waterPlatform
-TabUtil:Toggle({ -- [FIX: Dynamic Height WoW]
-    Title = "Walk on Water",
-    Callback = function(v)
-        getgenv().WoW = v
-        if v then
-            if not waterPlatform then
-                waterPlatform = Instance.new("Part", workspace)
-                waterPlatform.Name = "FlowHub_Water"
-                waterPlatform.Size = Vector3.new(500, 1, 500)
-                waterPlatform.Transparency = 1
-                waterPlatform.Anchored = true
-            end
-            local lockY = 0
-            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                lockY = LocalPlayer.Character.HumanoidRootPart.Position.Y - 3.5
-            end
-            task.spawn(function()
-                while getgenv().WoW do
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        waterPlatform.Position = Vector3.new(LocalPlayer.Character.HumanoidRootPart.Position.X, lockY, LocalPlayer.Character.HumanoidRootPart.Position.Z)
-                    end
-                    task.wait()
+TabUtil:Toggle({ Title = "Anti Drown (Keep Health)", Callback = function(v)
+    getgenv().AntiDrown = v
+    task.spawn(function()
+        while getgenv().AntiDrown do
+            pcall(function()
+                if LocalPlayer.Character.Humanoid:GetState() == Enum.HumanoidStateType.Swimming then
+                    LocalPlayer.Character.Humanoid.Health = LocalPlayer.Character.Humanoid.MaxHealth
                 end
             end)
-        else
-            if waterPlatform then waterPlatform:Destroy() waterPlatform = nil end
+            task.wait(0.5)
         end
-    end
-})
-
-TabUtil:Toggle({ -- [FIX: Health-based Anti Drown]
-    Title = "Anti Drown",
-    Callback = function(v)
-        getgenv().AntiDrown = v
-        task.spawn(function()
-            while getgenv().AntiDrown do
-                pcall(function()
-                    local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
-                    if hum and hum:GetState() == Enum.HumanoidStateType.Swimming then
-                        if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
-                    end
-                end)
-                task.wait(0.5)
-            end
-        end)
-    end
-})
-
--- ==========================================
--- 6. FINAL NOTIFY
--- ==========================================
-Window:Notify({ Title = "Flow Hub", Content = "Official V1.0.0 Loaded", Duration = 3 })
-
-task.spawn(function()
-    pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
     end)
-end)
+end})
+
+-- ==========================================
+-- 7. TAB: CREDITS (NO ATOMIC)
+-- ==========================================
+local TabCred = Window:Tab({ Title = "Credits", Icon = "solar:heart-bold" })
+TabCred:Section({ Title = "Project: Flow Hub" })
+TabCred:Section({ Title = "Lead Developer: Alfer1427\nSupport: Flow Hub Team", TextSize = 12 })
+TabCred:Button({ Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/flowhub") end })
+
+-- ==========================================
+-- BOOT
+-- ==========================================
+Window:Notify({ Title = "Flow Hub", Content = "V1.0.0 Successfully Loaded", Duration = 3 })
+task.spawn(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))() end) end)
