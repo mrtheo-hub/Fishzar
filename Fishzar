@@ -1,135 +1,83 @@
--- [[ FLOW HUB OFFICIAL V2.5.0 ]]
--- NO-KEY EDITION | STABLE RENDERING
+-- [[ FLOW HUB OFFICIAL V2.6.0 ]]
+-- CORE FIX: INSTANT UI RENDERING
 
--- 1. PRE-EXECUTION GUARD (Mencegah Spam UI)
-if _G.FlowHubRunning then 
-    return 
-end
-_G.FlowHubRunning = true
+if getgenv().FlowHubRunning then return end
+getgenv().FlowHubRunning = true
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
-local TweenService = game:GetService("TweenService")
 
-local Version = "2.5.0 (No-Key)"
-local Executor = (identifyexecutor and identifyexecutor()) or "Mobile"
-
--- Cleanup Sisa UI Lama
+-- 1. CLEANUP (Hapus UI lama agar bersih)
 for _, v in pairs(CoreGui:GetChildren()) do
-    if v.Name == "FlowHub_LoadUI" or v.Name == "WindUI" then 
-        v:Destroy() 
-    end
+    if v.Name == "WindUI" then v:Destroy() end
 end
 
--- ==========================================
--- 2. MODERN LOADING SYSTEM
--- ==========================================
-local Screen = Instance.new("ScreenGui", CoreGui)
-Screen.Name = "FlowHub_LoadUI"
-Screen.DisplayOrder = 9999
+-- 2. LOAD WINDUI LIBRARY
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
-local Main = Instance.new("Frame", Screen)
-Main.Size = UDim2.fromOffset(300, 150)
-Main.Position = UDim2.new(0.5, -150, 0.5, -75)
-Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-Instance.new("UICorner", Main)
-Instance.new("UIStroke", Main).Color = Color3.fromRGB(0, 180, 216)
+-- 3. CREATE WINDOW SEKALIGUS (TANPA JEDA)
+local Window = WindUI:CreateWindow({
+    Title = "Flow Hub Official",
+    Icon = "image", -- Fallback icon aman
+    Folder = "FlowHub_Data",
+    Size = UDim2.fromOffset(580, 460),
+    Transparent = false,
+    Theme = "Dark"
+})
 
-local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "FLOW HUB"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 18
-Title.BackgroundTransparency = 1
-
-local BarBG = Instance.new("Frame", Main)
-BarBG.Size = UDim2.new(0.8, 0, 0, 4)
-BarBG.Position = UDim2.new(0.1, 0, 0.6, 0)
-BarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-BarBG.BorderSizePixel = 0
-
-local Bar = Instance.new("Frame", BarBG)
-Bar.Size = UDim2.new(0, 0, 1, 0)
-Bar.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-Bar.BorderSizePixel = 0
-
-local Status = Instance.new("TextLabel", Main)
-Status.Size = UDim2.new(1, 0, 0, 20)
-Status.Position = UDim2.new(0, 0, 0.75, 0)
-Status.Text = "Loading Assets..."
-Status.TextColor3 = Color3.fromRGB(150, 150, 150)
-Status.Font = Enum.Font.Gotham
-Status.TextSize = 12
-Status.BackgroundTransparency = 1
+Window:Tag({ Title = "Stable Build", Color = Color3.fromRGB(0, 180, 216) })
 
 -- ==========================================
--- 3. MAIN UI INITIALIZATION
+-- 4. BUILD TABS & ELEMENTS INSTANTLY
 -- ==========================================
-local function StartHub()
-    -- Start Fishzar in Background
-    task.spawn(function()
-        pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
-        end)
-    end)
+-- Tab Main
+local TabMain = Window:Tab({ Title = "Main", Icon = "home" })
+TabMain:Section({ Title = "Profile" })
+TabMain:Button({ 
+    Title = "Copy Discord Link", 
+    Callback = function() setclipboard("https://discord.gg/flowhub") end 
+})
 
-    local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-    local Window = WindUI:CreateWindow({
-        Title = "Flow Hub Official",
-        Folder = "FlowHub_V2",
-        Icon = "solar:waterdrop-bold",
-        Size = UDim2.fromOffset(580, 460),
-        Search = true
-    })
+-- Tab Teleport
+local TabTele = Window:Tab({ Title = "Teleport", Icon = "map" })
+local Locs = {
+    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256), 
+    ["Gua Crystaliz"] = Vector3.new(171, -142, -4938)
+}
+local list = {} for k,_ in pairs(Locs) do table.insert(list, k) end
 
-    Window:Tag({ Title = "Exec: " .. Executor, Color = Color3.fromRGB(0, 180, 216) })
-    Window:Tag({ Title = "Ver: " .. Version, Color = Color3.new(1,1,1) })
+TabTele:Dropdown({ 
+    Title = "Select Destination", 
+    Values = list, 
+    Callback = function(v) 
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locs[v]) 
+        end
+    end 
+})
 
-    -- Jeda Rendering Tab (Mencegah Tab Kosong)
-    task.wait(0.2)
-    local Tab1 = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
-    task.wait(0.1)
-    Tab1:Section({ Title = "Welcome, " .. LocalPlayer.Name })
-    Tab1:Button({ Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/flowhub") end })
-
-    task.wait(0.1)
-    local Tab2 = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
-    task.wait(0.1)
-    Tab2:Section({ Title = "Select Island" })
-    local Locs = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Gua Crystaliz"] = Vector3.new(171, -142, -4938)}
-    local n = {} for k,_ in pairs(Locs) do table.insert(n, k) end
-    Tab2:Dropdown({ Title = "Locations", Values = n, Callback = function(v) 
-        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locs[v]) 
-    end})
-
-    task.wait(0.1)
-    local Tab3 = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
-    task.wait(0.1)
-    Tab3:Section({ Title = "Settings" })
-    Tab3:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WoW = v end })
-    Tab3:Button({ Title = "Rejoin Server", Callback = function() 
-        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) 
-    end})
-    
-    -- Cleanup loading screen
-    Screen:Destroy()
-end
+-- Tab Utilities
+local TabUtil = Window:Tab({ Title = "Utilities", Icon = "settings" })
+TabUtil:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WoW = v end })
+TabUtil:Button({ Title = "Rejoin Server", Callback = function() 
+    game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) 
+end})
 
 -- ==========================================
--- 4. BOOT SEQUENCE
+-- 5. LOAD FISHZAR DI BACKGROUND (PALING AKHIR)
 -- ==========================================
+Window:Notify({ 
+    Title = "Flow Hub", 
+    Content = "Loading Fishzar Script...", 
+    Duration = 3 
+})
+
 task.spawn(function()
-    -- Animasi Loading Bar
-    for i = 1, 100 do
-        local targetSize = UDim2.new(i/100, 0, 1, 0)
-        TweenService:Create(Bar, TweenInfo.new(0.02), {Size = targetSize}):Play()
-        if i == 50 then Status.Text = "Synchronizing Tabs..." end
-        if i == 80 then Status.Text = "Executing Fishzar..." end
-        task.wait(0.02)
-    end
-    Status.Text = "Ready!"
-    task.wait(0.5)
-    StartHub()
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
+    end)
 end)
+
+-- Reset flag saat UI ditutup (Opsional, tergantung behaviour WindUI)
+-- getgenv().FlowHubRunning = false
