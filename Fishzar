@@ -1,229 +1,171 @@
--- [[ FLOW HUB | ATOMIC REBIRTH V1.5.0 ]]
--- Author: Atomic Community (Dapz, Theo, Mon)
+-- [[ FLOW HUB | ATOMIC PRO V1.6.0 ]]
+-- Fix: Tab Visibility, Animation Sequence, & Key Transition
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
-local Stats = game:GetService("Stats")
 
--- ============================================================================
--- 1. KEY SYSTEM & AUTO-SAVE
--- ============================================================================
+-- CONFIG & KEYS
 local ValidKeys = {"FlowHub", "Dapz", "Mon", "Theo"}
-local KeyFile = "AtomicFlow_Key.txt"
+local KeyFile = "Atomic_Key_V16.txt"
+local function SaveK(k) writefile(KeyFile, k) end
+local function ReadK() return isfile(KeyFile) and readfile(KeyFile) or "" end
 
-local function SaveKey(key) writefile(KeyFile, key) end
-local function ReadKey() return isfile(KeyFile) and readfile(KeyFile) or "" end
-
--- ============================================================================
--- 2. LOADING & KEY UI
--- ============================================================================
-local function StartSystem()
-    local Screen = Instance.new("ScreenGui", game.CoreGui)
-    local Main = Instance.new("Frame", Screen)
-    Main.Size = UDim2.fromOffset(400, 300)
-    Main.Position = UDim2.new(0.5, -200, 0.5, -150)
-    Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    Instance.new("UICorner", Main)
-
-    local Logo = Instance.new("ImageLabel", Main)
-    Logo.Size = UDim2.fromOffset(100, 100)
-    Logo.Position = UDim2.new(0.5, -50, 0.1, 0)
-    Logo.Image = "rbxassetid://88673887911141"
-    Logo.BackgroundTransparency = 1
-
-    local Title = Instance.new("TextLabel", Main)
-    Title.Text = "FLOW HUB | KEY SYSTEM"
-    Title.Position = UDim2.new(0, 0, 0.45, 0)
-    Title.Size = UDim2.new(1, 0, 0, 30)
-    Title.TextColor3 = Color3.new(1,1,1)
-    Title.Font = Enum.Font.GothamBold
-    Title.BackgroundTransparency = 1
-
-    local Input = Instance.new("TextBox", Main)
-    Input.Size = UDim2.new(0.8, 0, 0, 40)
-    Input.Position = UDim2.new(0.1, 0, 0.6, 0)
-    Input.PlaceholderText = "Enter Key Here..."
-    Input.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Input.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", Input)
-
-    local btn = Instance.new("TextButton", Main)
-    btn.Size = UDim2.new(0.8, 0, 0, 40)
-    btn.Position = UDim2.new(0.1, 0, 0.8, 0)
-    btn.Text = "LOGIN"
-    btn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-    btn.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", btn)
-
-    -- Auto login if key exists
-    local saved = ReadKey()
-    if table.find(ValidKeys, saved) then
-        Screen:Destroy()
-        return true
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        local entered = Input.Text
-        if table.find(ValidKeys, entered) then
-            SaveKey(entered)
-            Screen:Destroy()
-        else
-            LocalPlayer:Kick("Invalid Key! Case Sensitive.")
-        end
-    end)
-    
-    repeat task.wait() until not Screen.Parent
-    return true
+-- UTILS: Simple Tween
+local function Fade(obj, info, property)
+    TweenService:Create(obj, info, property):Play()
 end
 
-if StartSystem() then
--- ============================================================================
--- 3. MAIN UI (WindUI)
--- ============================================================================
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({
-    Title = "Flow Hub | Atomic V1.5", Folder = "FlowHubV15", Icon = "solar:waterdrop-bold",
-    Size = UDim2.fromOffset(600, 480),
-    Search = true -- SEARCH ENABLED
-})
+-- ==========================================
+-- STAGE 1: LOADING ANIMATION
+-- ==========================================
+local Screen = Instance.new("ScreenGui", CoreGui)
+Screen.Name = "Atomic_Flow_Sequence"
+Screen.DisplayOrder = 9999
+Screen.ResetOnSpawn = false
 
-local Tabs = {
-    Main = Window:Tab({ Title = "Main", Icon = "solar:home-bold" }),
-    Fish = Window:Tab({ Title = "Fishing", Icon = "solar:fishing-rod-bold" }),
-    Teleport = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" }),
-    Util = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" }),
-}
+local MainFrame = Instance.new("Frame", Screen)
+MainFrame.Size = UDim2.new(1, 0, 1, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+MainFrame.BorderSizePixel = 0
 
--- [MAIN]
-Tabs.Main:Section({ Title = "Changelog V1.5" })
-Tabs.Main:Section({ Title = "• Improved Walk on Water (No Stutter)\n• New Key System (Auto-Save)\n• Improved Stats (High Accuracy)\n• Fixed PC Minimize Hide", TextSize = 12 })
-Tabs.Main:Button({ Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/wVr9r3tCmT") end })
+local Logo = Instance.new("ImageLabel", MainFrame)
+Logo.Size = UDim2.fromOffset(150, 150)
+Logo.Position = UDim2.new(0.5, -75, 0.4, -75)
+Logo.Image = "rbxassetid://88673887911141"
+Logo.BackgroundTransparency = 1
+Logo.ImageTransparency = 1
 
--- [FISHING]
-getgenv().Flow = { Farm = false, Sell = false, Delay = 3.0, Equip = false }
-Tabs.Fish:Toggle({ Title = "Auto Farm", Callback = function(v) getgenv().Flow.Farm = v end })
-Tabs.Fish:Toggle({ Title = "Auto Sell", Callback = function(v) getgenv().Flow.Sell = v end })
-Tabs.Fish:Toggle({ Title = "Auto Equip Rod", Callback = function(v) getgenv().Flow.Equip = v end })
+local BarBG = Instance.new("Frame", MainFrame)
+BarBG.Size = UDim2.new(0, 300, 0, 4)
+BarBG.Position = UDim2.new(0.5, -150, 0.65, 0)
+BarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+BarBG.BorderSizePixel = 0
+BarBG.BackgroundTransparency = 1
 
--- [TELEPORT]
-local Islands = {
-    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256),
-    ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833),
-    ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706),
-    ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
-    ["Pedalaman Posei"] = Vector3.new(-861, -367, -1283)
-}
-local islandNames = {} for k,_ in pairs(Islands) do table.insert(islandNames, k) end
+local Bar = Instance.new("Frame", BarBG)
+Bar.Size = UDim2.new(0, 0, 1, 0)
+Bar.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
+Bar.BorderSizePixel = 0
 
-Tabs.Teleport:Dropdown({
-    Title = "Teleport to Island", Values = islandNames,
-    Callback = function(v) LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v]) end
-})
-
-local pDrop
-local function getP() local t = {} for _,p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then table.insert(t, p.Name) end end return t end
-pDrop = Tabs.Teleport:Dropdown({ Title = "Teleport Player", Values = getP(), Callback = function(v)
-    local target = Players:FindFirstChild(v)
-    if target and target.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame end
-end})
-Tabs.Teleport:Button({ Title = "Refresh Player List", Callback = function() pDrop:SetValues(getP()) end })
-
--- [UTILITIES]
-getgenv().Toggles = { WoW = false, AntiDrown = false, Stats = false, Streamer = false }
-Tabs.Util:Toggle({ Title = "Walk on Water (Smooth)", Callback = function(v) getgenv().Toggles.WoW = v end })
-Tabs.Util:Toggle({ Title = "Anti Drown", Callback = function(v) getgenv().Toggles.AntiDrown = v end })
-Tabs.Util:Toggle({ Title = "Real-Time Stats", Callback = function(v) getgenv().Toggles.Stats = v end })
-Tabs.Util:Toggle({ Title = "Streamer Mode", Callback = function(v) getgenv().Toggles.Streamer = v end })
-Tabs.Util:Button({ Title = "Performance Boost", Callback = function()
-    for _,v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic v.CastShadow = false
-        elseif v:IsA("Texture") or v:IsA("Decal") then v:Destroy() end
-    end
-end})
-
--- ============================================================================
--- 4. FINAL ENGINE
--- ============================================================================
-local StatsGui = Instance.new("ScreenGui", game.CoreGui)
-local StatLabel = Instance.new("TextLabel", StatsGui)
-StatLabel.Size = UDim2.fromOffset(200, 40)
-StatLabel.Position = UDim2.new(0.5, -100, 0, 10)
-StatLabel.BackgroundColor3 = Color3.new(0,0,0)
-StatLabel.TextColor3 = Color3.new(1,1,1)
-StatLabel.Visible = false
-Instance.new("UICorner", StatLabel)
-
-RunService.Heartbeat:Connect(function(dt)
-    -- Stats Update
-    StatLabel.Visible = getgenv().Toggles.Stats
-    if getgenv().Toggles.Stats then
-        StatLabel.Text = "FPS: " .. math.floor(1/dt) .. " | Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms"
-    end
-
-    -- Smooth Walk on Water Logic
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        local root = char.HumanoidRootPart
-        if getgenv().Toggles.WoW then
-            local ray = Ray.new(root.Position, Vector3.new(0, -10, 0))
-            local hit, pos, mat = workspace:FindPartOnRay(ray, char)
-            if hit and hit.Material == Enum.Material.Water then
-                root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
-                root.CFrame = CFrame.new(root.Position.X, hit.Position.Y + 3.8, root.Position.Z)
-            end
-        end
-        -- Anti Drown Fix
-        if getgenv().Toggles.AntiDrown then
-            char.Humanoid:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-        end
-    end
-
-    -- Streamer Mode
-    if getgenv().Toggles.Streamer then
-        for _,p in pairs(Players:GetPlayers()) do
-            if p.Character then
-                for _,v in pairs(p.Character:GetDescendants()) do
-                    if v:IsA("BillboardGui") or v.Name:lower():find("name") then v.Enabled = false end
-                end
-            end
-        end
-    end
-end)
-
--- Auto Sell
+-- START LOADING SEQ
 task.spawn(function()
-    while task.wait(5) do
-        if getgenv().Flow.Sell then
-            local rs = ReplicatedStorage:FindFirstChild("FishingSystem")
-            if rs and rs:FindFirstChild("SellFish") then rs.SellFish:FireServer() end
-        end
+    Fade(Logo, TweenInfo.new(1), {ImageTransparency = 0})
+    Fade(BarBG, TweenInfo.new(1), {BackgroundTransparency = 0})
+    task.wait(1)
+    
+    for i = 1, 100 do
+        Bar.Size = UDim2.new(i/100, 0, 1, 0)
+        task.wait(0.01)
     end
+    
+    Fade(Logo, TweenInfo.new(0.5), {ImageTransparency = 1})
+    Fade(BarBG, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+    Fade(Bar, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+    task.wait(0.6)
+    
+    -- ==========================================
+    -- STAGE 2: KEY SYSTEM UI (WITH ANIMATION)
+    -- ==========================================
+    local KeyPanel = Instance.new("Frame", MainFrame)
+    KeyPanel.Size = UDim2.fromOffset(350, 250)
+    KeyPanel.Position = UDim2.new(0.5, -175, 1.2, 0) -- Start below screen
+    KeyPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    Instance.new("UICorner", KeyPanel).CornerRadius = UDim.new(0, 12)
+    
+    local KeyInput = Instance.new("TextBox", KeyPanel)
+    KeyInput.Size = UDim2.new(0.8, 0, 0, 40)
+    KeyInput.Position = UDim2.new(0.1, 0, 0.4, 0)
+    KeyInput.PlaceholderText = "Input Key..."
+    KeyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    KeyInput.TextColor3 = Color3.new(1,1,1)
+    Instance.new("UICorner", KeyInput)
+
+    local KeyBtn = Instance.new("TextButton", KeyPanel)
+    KeyBtn.Size = UDim2.new(0.8, 0, 0, 40)
+    KeyBtn.Position = UDim2.new(0.1, 0, 0.65, 0)
+    KeyBtn.Text = "AUTHENTICATE"
+    KeyBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
+    KeyBtn.TextColor3 = Color3.new(1,1,1)
+    KeyBtn.Font = Enum.Font.GothamBold
+    Instance.new("UICorner", KeyBtn)
+
+    -- Slide Up Animation
+    KeyPanel:TweenPosition(UDim2.new(0.5, -175, 0.5, -125), "Out", "Back", 0.6)
+
+    -- Auto-Login Check
+    local saved = ReadK()
+    if table.find(ValidKeys, saved) then
+        task.wait(0.5)
+        KeyPanel:TweenPosition(UDim2.new(0.5, -175, -0.5, 0), "In", "Back", 0.5)
+        task.wait(0.5)
+        Screen:Destroy()
+        InitializeMain()
+    end
+
+    KeyBtn.MouseButton1Click:Connect(function()
+        if table.find(ValidKeys, KeyInput.Text) then
+            SaveK(KeyInput.Text)
+            KeyPanel:TweenPosition(UDim2.new(0.5, -175, -0.5, 0), "In", "Back", 0.5)
+            task.wait(0.5)
+            Screen:Destroy()
+            InitializeMain()
+        else
+            KeyInput.Text = ""
+            KeyInput.PlaceholderText = "WRONG KEY!"
+            KeyInput.PlaceholderColor3 = Color3.new(1,0,0)
+        end
+    end)
 end)
 
--- Fishing Engine
-local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem")
-local AnimController = require(FishingSystem.FishingModules:WaitForChild("AnimationController"))
-task.spawn(function()
-    while task.wait(0.5) do
-        if getgenv().Flow.Farm and LocalPlayer.Character then
-            pcall(function()
-                local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-                if tool then
-                    local root = LocalPlayer.Character.HumanoidRootPart
-                    local castPos = root.Position + (root.CFrame.LookVector * 15)
-                    AnimController:Play("PrepareCast", 0.1)
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                    task.wait(1.5); FishingSystem.PrecalcFish:InvokeServer(); task.wait(0.5)
-                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-                    task.wait(getgenv().Flow.Delay)
-                    FishingSystem.FishGiver:FireServer({ ["hookPosition"] = castPos })
-                    task.wait(1.5); FishingSystem.CleanupCast:FireServer()
-                end
-            end)
-        end
+-- ==========================================
+-- STAGE 3: MAIN UI & LOADSTRING
+-- ==========================================
+function InitializeMain()
+    -- LOAD FISHZAR FIRST (NO RECODE)
+    task.spawn(function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
+        end)
+    end)
+
+    -- LOAD WINDUI
+    local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+    local Window = WindUI:CreateWindow({
+        Title = "Flow Hub | Atomic V1.6",
+        Folder = "FlowHub_V16",
+        Icon = "solar:waterdrop-bold",
+        Size = UDim2.fromOffset(600, 480),
+        Transparent = false,
+        Search = true
+    })
+
+    -- Add high display order for WindUI ScreenGui
+    for _,v in pairs(CoreGui:GetChildren()) do
+        if v:IsA("ScreenGui") and v.Name == "WindUI" then v.DisplayOrder = 10000 end
     end
-end)
+
+    local Tabs = {
+        Main = Window:Tab({ Title = "Main", Icon = "solar:home-bold" }),
+        Tele = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" }),
+        Util = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
+    }
+
+    -- MAIN TAB
+    Tabs.Main:Section({ Title = "Status: Authenticated" })
+    Tabs.Main:Section({ Title = "• Fix: UI Visibility (Z-Index)\n• Fix: Sequential Animation\n• Integrated: Fishzar Loadstring", TextSize = 12 })
+
+    -- TELEPORT (Contoh satu dropdown untuk tes bug)
+    local Islands = { ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706) }
+    Tabs.Tele:Dropdown({
+        Title = "Select Destination",
+        Values = {"Pulau Crystaliz"},
+        Callback = function(v) LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v]) end
+    })
+    
+    -- UTILITIES (Walk on Water Fix)
+    getgenv().Toggles = { WoW = false }
+    Tabs.Util:Toggle({ Title = "Walk on Water (Smooth)", Callback = function(v) getgenv().Toggles.WoW = v end })
 end
