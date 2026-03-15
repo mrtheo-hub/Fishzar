@@ -1,151 +1,149 @@
--- [[ FLOW HUB | ATOMIC PRO V1.6.0 ]]
--- Fix: Tab Visibility, Animation Sequence, & Key Transition
+-- [[ FLOW HUB | ATOMIC FINAL FIX V1.7.0 ]]
+-- Author: Atomic Community (Dapz, Theo, Mon)
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local HttpService = game:GetService("HttpService")
 
--- CONFIG & KEYS
 local ValidKeys = {"FlowHub", "Dapz", "Mon", "Theo"}
-local KeyFile = "Atomic_Key_V16.txt"
+local KeyFile = "Atomic_Secure_V17.txt"
+
+-- Utils
 local function SaveK(k) writefile(KeyFile, k) end
 local function ReadK() return isfile(KeyFile) and readfile(KeyFile) or "" end
 
--- UTILS: Simple Tween
-local function Fade(obj, info, property)
-    TweenService:Create(obj, info, property):Play()
+-- ==========================================
+-- 1. CLEANING PREVIOUS BUGS
+-- ==========================================
+for _, v in pairs(CoreGui:GetChildren()) do
+    if v.Name == "Atomic_System" or v.Name == "WindUI" then v:Destroy() end
 end
 
 -- ==========================================
--- STAGE 1: LOADING ANIMATION
+-- 2. PROFESSIONAL KEY & LOADING SYSTEM
 -- ==========================================
 local Screen = Instance.new("ScreenGui", CoreGui)
-Screen.Name = "Atomic_Flow_Sequence"
-Screen.DisplayOrder = 9999
-Screen.ResetOnSpawn = false
+Screen.Name = "Atomic_System"
+Screen.DisplayOrder = 99999
 
-local MainFrame = Instance.new("Frame", Screen)
-MainFrame.Size = UDim2.new(1, 0, 1, 0)
-MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-MainFrame.BorderSizePixel = 0
+local Background = Instance.new("Frame", Screen)
+Background.Size = UDim2.new(1, 0, 1, 0)
+Background.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Background.BorderSizePixel = 0
 
-local Logo = Instance.new("ImageLabel", MainFrame)
-Logo.Size = UDim2.fromOffset(150, 150)
-Logo.Position = UDim2.new(0.5, -75, 0.4, -75)
-Logo.Image = "rbxassetid://88673887911141"
+local MainContent = Instance.new("Frame", Background)
+MainContent.Size = UDim2.fromOffset(380, 420)
+MainContent.Position = UDim2.new(0.5, -190, 0.5, -210)
+MainContent.BackgroundTransparency = 1
+
+local Logo = Instance.new("ImageLabel", MainContent)
+Logo.Size = UDim2.fromOffset(120, 120)
+Logo.Position = UDim2.new(0.5, -60, 0, 0)
+Logo.Image = "rbxassetid://88673887911141" -- Logo Atomic
 Logo.BackgroundTransparency = 1
-Logo.ImageTransparency = 1
 
-local BarBG = Instance.new("Frame", MainFrame)
-BarBG.Size = UDim2.new(0, 300, 0, 4)
-BarBG.Position = UDim2.new(0.5, -150, 0.65, 0)
-BarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+local BarBG = Instance.new("Frame", MainContent)
+BarBG.Size = UDim2.new(0.8, 0, 0, 4)
+BarBG.Position = UDim2.new(0.1, 0, 0.35, 0)
+BarBG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 BarBG.BorderSizePixel = 0
-BarBG.BackgroundTransparency = 1
-
 local Bar = Instance.new("Frame", BarBG)
 Bar.Size = UDim2.new(0, 0, 1, 0)
 Bar.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
 Bar.BorderSizePixel = 0
 
--- START LOADING SEQ
+local KeyFrame = Instance.new("Frame", MainContent)
+KeyFrame.Size = UDim2.new(1, 0, 0.5, 0)
+KeyFrame.Position = UDim2.new(0, 0, 0.45, 0)
+KeyFrame.BackgroundTransparency = 1
+KeyFrame.Visible = false
+
+local Input = Instance.new("TextBox", KeyFrame)
+Input.Size = UDim2.new(0.9, 0, 0, 45)
+Input.Position = UDim2.new(0.05, 0, 0.1, 0)
+Input.PlaceholderText = "ENTER ATOMIC KEY..."
+Input.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Input.TextColor3 = Color3.new(1,1,1)
+Input.Font = Enum.Font.GothamBold
+Input.TextSize = 14
+Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 8)
+Instance.new("UIStroke", Input).Color = Color3.fromRGB(0, 180, 216)
+
+local Btn = Instance.new("TextButton", KeyFrame)
+Btn.Size = UDim2.new(0.9, 0, 0, 45)
+Btn.Position = UDim2.new(0.05, 0, 0.4, 0)
+Btn.Text = "AUTHENTICATE"
+Btn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
+Btn.TextColor3 = Color3.new(1,1,1)
+Btn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
+
+-- ==========================================
+-- 3. ANIMATION LOGIC
+-- ==========================================
 task.spawn(function()
-    Fade(Logo, TweenInfo.new(1), {ImageTransparency = 0})
-    Fade(BarBG, TweenInfo.new(1), {BackgroundTransparency = 0})
-    task.wait(1)
-    
+    -- Loading Bar Animation
     for i = 1, 100 do
         Bar.Size = UDim2.new(i/100, 0, 1, 0)
-        task.wait(0.01)
+        task.wait(0.02)
     end
+    task.wait(0.5)
+    BarBG:Destroy()
     
-    Fade(Logo, TweenInfo.new(0.5), {ImageTransparency = 1})
-    Fade(BarBG, TweenInfo.new(0.5), {BackgroundTransparency = 1})
-    Fade(Bar, TweenInfo.new(0.5), {BackgroundTransparency = 1})
-    task.wait(0.6)
+    -- Show Key System
+    KeyFrame.Visible = true
     
-    -- ==========================================
-    -- STAGE 2: KEY SYSTEM UI (WITH ANIMATION)
-    -- ==========================================
-    local KeyPanel = Instance.new("Frame", MainFrame)
-    KeyPanel.Size = UDim2.fromOffset(350, 250)
-    KeyPanel.Position = UDim2.new(0.5, -175, 1.2, 0) -- Start below screen
-    KeyPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-    Instance.new("UICorner", KeyPanel).CornerRadius = UDim.new(0, 12)
-    
-    local KeyInput = Instance.new("TextBox", KeyPanel)
-    KeyInput.Size = UDim2.new(0.8, 0, 0, 40)
-    KeyInput.Position = UDim2.new(0.1, 0, 0.4, 0)
-    KeyInput.PlaceholderText = "Input Key..."
-    KeyInput.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    KeyInput.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", KeyInput)
-
-    local KeyBtn = Instance.new("TextButton", KeyPanel)
-    KeyBtn.Size = UDim2.new(0.8, 0, 0, 40)
-    KeyBtn.Position = UDim2.new(0.1, 0, 0.65, 0)
-    KeyBtn.Text = "AUTHENTICATE"
-    KeyBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-    KeyBtn.TextColor3 = Color3.new(1,1,1)
-    KeyBtn.Font = Enum.Font.GothamBold
-    Instance.new("UICorner", KeyBtn)
-
-    -- Slide Up Animation
-    KeyPanel:TweenPosition(UDim2.new(0.5, -175, 0.5, -125), "Out", "Back", 0.6)
-
     -- Auto-Login Check
     local saved = ReadK()
     if table.find(ValidKeys, saved) then
-        task.wait(0.5)
-        KeyPanel:TweenPosition(UDim2.new(0.5, -175, -0.5, 0), "In", "Back", 0.5)
-        task.wait(0.5)
-        Screen:Destroy()
-        InitializeMain()
+        Input.Text = saved
+        Btn.Text = "KEY SAVED! LOGGING IN..."
+        task.wait(1)
+        SuccessAuth()
     end
-
-    KeyBtn.MouseButton1Click:Connect(function()
-        if table.find(ValidKeys, KeyInput.Text) then
-            SaveK(KeyInput.Text)
-            KeyPanel:TweenPosition(UDim2.new(0.5, -175, -0.5, 0), "In", "Back", 0.5)
-            task.wait(0.5)
-            Screen:Destroy()
-            InitializeMain()
-        else
-            KeyInput.Text = ""
-            KeyInput.PlaceholderText = "WRONG KEY!"
-            KeyInput.PlaceholderColor3 = Color3.new(1,0,0)
-        end
-    end)
 end)
 
+Btn.MouseButton1Click:Connect(function()
+    local userKey = Input.Text
+    if table.find(ValidKeys, userKey) then
+        SaveK(userKey)
+        SuccessAuth()
+    else
+        LocalPlayer:Kick("Flow Hub: WRONG KEY DETECTED. Re-execute and use the correct key.")
+    end
+end)
+
+function SuccessAuth()
+    -- Fade out
+    TweenService:Create(Background, TweenInfo.new(1), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(MainContent, TweenInfo.new(0.5), {GroupTransparency = 1}):Play()
+    task.wait(1)
+    Screen:Destroy()
+    
+    -- START REAL UI (NO BUGS)
+    ExecuteFlowHub()
+end
+
 -- ==========================================
--- STAGE 3: MAIN UI & LOADSTRING
+-- 4. MAIN SCRIPT (AFTER KEY)
 -- ==========================================
-function InitializeMain()
-    -- LOAD FISHZAR FIRST (NO RECODE)
+function ExecuteFlowHub()
+    -- LOAD FISHZAR (NO RECODE)
     task.spawn(function()
         pcall(function()
             loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
         end)
     end)
 
-    -- LOAD WINDUI
     local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
     local Window = WindUI:CreateWindow({
-        Title = "Flow Hub | Atomic V1.6",
-        Folder = "FlowHub_V16",
+        Title = "Flow Hub | Atomic V1.7",
+        Folder = "FlowHubV17",
         Icon = "solar:waterdrop-bold",
         Size = UDim2.fromOffset(600, 480),
-        Transparent = false,
         Search = true
     })
-
-    -- Add high display order for WindUI ScreenGui
-    for _,v in pairs(CoreGui:GetChildren()) do
-        if v:IsA("ScreenGui") and v.Name == "WindUI" then v.DisplayOrder = 10000 end
-    end
 
     local Tabs = {
         Main = Window:Tab({ Title = "Main", Icon = "solar:home-bold" }),
@@ -153,19 +151,8 @@ function InitializeMain()
         Util = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
     }
 
-    -- MAIN TAB
     Tabs.Main:Section({ Title = "Status: Authenticated" })
-    Tabs.Main:Section({ Title = "• Fix: UI Visibility (Z-Index)\n• Fix: Sequential Animation\n• Integrated: Fishzar Loadstring", TextSize = 12 })
-
-    -- TELEPORT (Contoh satu dropdown untuk tes bug)
-    local Islands = { ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706) }
-    Tabs.Tele:Dropdown({
-        Title = "Select Destination",
-        Values = {"Pulau Crystaliz"},
-        Callback = function(v) LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v]) end
-    })
+    Tabs.Main:Section({ Title = "• Fixed: Ghost UI Bug (Video Fix)\n• Fixed: Logo Visibility\n• Added: Auto-Kick on Wrong Key", TextSize = 12 })
     
-    -- UTILITIES (Walk on Water Fix)
-    getgenv().Toggles = { WoW = false }
-    Tabs.Util:Toggle({ Title = "Walk on Water (Smooth)", Callback = function(v) getgenv().Toggles.WoW = v end })
+    -- (Sisa fitur teleport, walkwater, dll dilanjutkan di sini sesuai kebutuhan)
 end
