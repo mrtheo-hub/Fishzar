@@ -1,7 +1,7 @@
--- [[ FLOW HUB OFFICIAL V2.4.0 ]]
--- FINAL STABLE | ANTI-SPAM & TAB RENDERING FIX
+-- [[ FLOW HUB OFFICIAL V2.5.0 ]]
+-- NO-KEY EDITION | STABLE RENDERING
 
--- 1. TRIPLE-LOCK SYSTEM (Mencegah Spam UI)
+-- 1. PRE-EXECUTION GUARD (Mencegah Spam UI)
 if _G.FlowHubRunning then 
     return 
 end
@@ -10,78 +10,75 @@ _G.FlowHubRunning = true
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
-local Version = "2.4.0 (Stable)"
+local Version = "2.5.0 (No-Key)"
 local Executor = (identifyexecutor and identifyexecutor()) or "Mobile"
-local ValidKeys = {"FlowHub", "Dapz", "Mon", "Theo"}
-local KeyFile = "FlowHub_Key.txt"
 
--- Cleanup Semua UI Lama (Anti-Stacking)
-local function Cleanup()
-    for _, v in pairs(CoreGui:GetChildren()) do
-        if v.Name == "FlowHub_Auth" or v.Name == "WindUI" then 
-            v:Destroy() 
-        end
+-- Cleanup Sisa UI Lama
+for _, v in pairs(CoreGui:GetChildren()) do
+    if v.Name == "FlowHub_LoadUI" or v.Name == "WindUI" then 
+        v:Destroy() 
     end
 end
-Cleanup()
-
-local function SaveK(k) writefile(KeyFile, k) end
-local function ReadK() return isfile(KeyFile) and readfile(KeyFile) or "" end
 
 -- ==========================================
--- 2. AUTHENTICATION UI
+-- 2. MODERN LOADING SYSTEM
 -- ==========================================
 local Screen = Instance.new("ScreenGui", CoreGui)
-Screen.Name = "FlowHub_Auth"
+Screen.Name = "FlowHub_LoadUI"
 Screen.DisplayOrder = 9999
 
-local MainAuth = Instance.new("Frame", Screen)
-MainAuth.Size = UDim2.fromOffset(340, 260)
-MainAuth.Position = UDim2.new(0.5, -170, 0.5, -130)
-MainAuth.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-Instance.new("UICorner", MainAuth)
-Instance.new("UIStroke", MainAuth).Color = Color3.fromRGB(0, 180, 216)
+local Main = Instance.new("Frame", Screen)
+Main.Size = UDim2.fromOffset(300, 150)
+Main.Position = UDim2.new(0.5, -150, 0.5, -75)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+Instance.new("UICorner", Main)
+Instance.new("UIStroke", Main).Color = Color3.fromRGB(0, 180, 216)
 
-local Title = Instance.new("TextLabel", MainAuth)
-Title.Size = UDim2.new(1, 0, 0, 50)
-Title.Text = "FLOW HUB | AUTH"
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "FLOW HUB"
 Title.TextColor3 = Color3.new(1, 1, 1)
 Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
 Title.BackgroundTransparency = 1
 
-local Input = Instance.new("TextBox", MainAuth)
-Input.Size = UDim2.new(0.8, 0, 0, 45)
-Input.Position = UDim2.new(0.1, 0, 0.4, 0)
-Input.PlaceholderText = "Enter Key..."
-Input.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Input.TextColor3 = Color3.new(1, 1, 1)
-Instance.new("UICorner", Input)
+local BarBG = Instance.new("Frame", Main)
+BarBG.Size = UDim2.new(0.8, 0, 0, 4)
+BarBG.Position = UDim2.new(0.1, 0, 0.6, 0)
+BarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+BarBG.BorderSizePixel = 0
 
-local Btn = Instance.new("TextButton", MainAuth)
-Btn.Size = UDim2.new(0.8, 0, 0, 45)
-Btn.Position = UDim2.new(0.1, 0, 0.7, 0)
-Btn.Text = "LOGIN"
-Btn.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
-Btn.TextColor3 = Color3.new(1, 1, 1)
-Btn.Font = Enum.Font.GothamBold
-Instance.new("UICorner", Btn)
+local Bar = Instance.new("Frame", BarBG)
+Bar.Size = UDim2.new(0, 0, 1, 0)
+Bar.BackgroundColor3 = Color3.fromRGB(0, 180, 216)
+Bar.BorderSizePixel = 0
+
+local Status = Instance.new("TextLabel", Main)
+Status.Size = UDim2.new(1, 0, 0, 20)
+Status.Position = UDim2.new(0, 0, 0.75, 0)
+Status.Text = "Loading Assets..."
+Status.TextColor3 = Color3.fromRGB(150, 150, 150)
+Status.Font = Enum.Font.Gotham
+Status.TextSize = 12
+Status.BackgroundTransparency = 1
 
 -- ==========================================
--- 3. MAIN HUB ENGINE (SEQUENTIAL RENDER)
+-- 3. MAIN UI INITIALIZATION
 -- ==========================================
-local isMainLoaded = false
-local function StartFlowHub()
-    if isMainLoaded then return end
-    isMainLoaded = true
-    
-    Screen:Destroy() -- Hapus UI Login
-    
-    -- Load WindUI
+local function StartHub()
+    -- Start Fishzar in Background
+    task.spawn(function()
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
+        end)
+    end)
+
     local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
     local Window = WindUI:CreateWindow({
         Title = "Flow Hub Official",
-        Folder = "FlowHub_Data",
+        Folder = "FlowHub_V2",
         Icon = "solar:waterdrop-bold",
         Size = UDim2.fromOffset(580, 460),
         Search = true
@@ -90,20 +87,20 @@ local function StartFlowHub()
     Window:Tag({ Title = "Exec: " .. Executor, Color = Color3.fromRGB(0, 180, 216) })
     Window:Tag({ Title = "Ver: " .. Version, Color = Color3.new(1,1,1) })
 
-    -- SEQUENTIAL TAB LOADING (Mencegah Tab Kosong)
+    -- Jeda Rendering Tab (Mencegah Tab Kosong)
     task.wait(0.2)
     local Tab1 = Window:Tab({ Title = "Main", Icon = "solar:home-bold" })
     task.wait(0.1)
-    Tab1:Section({ Title = "Information" })
+    Tab1:Section({ Title = "Welcome, " .. LocalPlayer.Name })
     Tab1:Button({ Title = "Copy Discord Link", Callback = function() setclipboard("https://discord.gg/flowhub") end })
 
     task.wait(0.1)
     local Tab2 = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" })
     task.wait(0.1)
-    Tab2:Section({ Title = "Teleport List" })
+    Tab2:Section({ Title = "Select Island" })
     local Locs = {["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Gua Crystaliz"] = Vector3.new(171, -142, -4938)}
     local n = {} for k,_ in pairs(Locs) do table.insert(n, k) end
-    Tab2:Dropdown({ Title = "Select Island", Values = n, Callback = function(v) 
+    Tab2:Dropdown({ Title = "Locations", Values = n, Callback = function(v) 
         LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Locs[v]) 
     end})
 
@@ -112,32 +109,27 @@ local function StartFlowHub()
     task.wait(0.1)
     Tab3:Section({ Title = "Settings" })
     Tab3:Toggle({ Title = "Walk on Water", Callback = function(v) _G.WoW = v end })
-    Tab3:Button({ Title = "Rejoin", Callback = function() game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) end })
-
-    -- LOAD FISHZAR DI AKHIR AGAR TIDAK MENGGANGU UI RENDER
-    task.spawn(function()
-        pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/mrtheo-hub/Fishzar/refs/heads/main/Fishzar"))()
-        end)
-    end)
+    Tab3:Button({ Title = "Rejoin Server", Callback = function() 
+        game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer) 
+    end})
+    
+    -- Cleanup loading screen
+    Screen:Destroy()
 end
 
 -- ==========================================
--- 4. LOGIN LOGIC
+-- 4. BOOT SEQUENCE
 -- ==========================================
-Btn.MouseButton1Click:Connect(function()
-    if table.find(ValidKeys, Input.Text) then
-        SaveK(Input.Text)
-        StartFlowHub()
-    else
-        LocalPlayer:Kick("Key Salah!")
+task.spawn(function()
+    -- Animasi Loading Bar
+    for i = 1, 100 do
+        local targetSize = UDim2.new(i/100, 0, 1, 0)
+        TweenService:Create(Bar, TweenInfo.new(0.02), {Size = targetSize}):Play()
+        if i == 50 then Status.Text = "Synchronizing Tabs..." end
+        if i == 80 then Status.Text = "Executing Fishzar..." end
+        task.wait(0.02)
     end
-end)
-
--- Auto Login Check
-local saved = ReadK()
-if table.find(ValidKeys, saved) then
-    Input.Text = saved
+    Status.Text = "Ready!"
     task.wait(0.5)
-    StartFlowHub()
-end
+    StartHub()
+end)
