@@ -1,5 +1,4 @@
 -- [[ FLOW HUB | FISHING SYSTEM V1.2.5 FINAL ]]
--- Author: Atomic Community
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
