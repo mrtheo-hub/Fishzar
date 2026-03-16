@@ -1,5 +1,4 @@
 -- [[ FLOW HUB | FISHING SYSTEM V1.2.5 FINAL ]]
--- Author: Atomic Community (Dapz, Theo, Mon)
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,14 +27,14 @@ getgenv().FlowConfig = {
     WebhookFilters = {Common=false, Uncommon=false, Rare=false, Epic=true, Legendary=true, Secret=true}
 }
 
--- [[ UI STATS LOGIC ]]
+-- [[ UI STATS LOGIC (FIXED FPS) ]]
 local StatsGui = Instance.new("ScreenGui", game.CoreGui)
 StatsGui.Name = "FlowStatsV12"
 StatsGui.Enabled = false
 
 local StatsFrame = Instance.new("Frame", StatsGui)
-StatsFrame.Size = UDim2.new(0, 250, 0, 45)
-StatsFrame.Position = UDim2.new(0.5, -125, 0, 15)
+StatsFrame.Size = UDim2.new(0, 260, 0, 45)
+StatsFrame.Position = UDim2.new(0.5, -130, 0, 15)
 StatsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 StatsFrame.Active = true; StatsFrame.Draggable = true
 Instance.new("UICorner", StatsFrame).CornerRadius = UDim.new(0, 10)
@@ -56,17 +55,17 @@ FPSL.Size = UDim2.new(0.33, -10, 1, 0); FPSL.Position = UDim2.new(0.66, 0, 0, 0)
 FPSL.BackgroundTransparency = 1; FPSL.TextColor3 = Color3.new(1,1,1)
 FPSL.Font = Enum.Font.GothamBold; FPSL.TextSize = 12; FPSL.TextXAlignment = Enum.TextXAlignment.Right
 
+-- Accurate FPS Counter Logic
+local fpsCount = 0
+RunService.RenderStepped:Connect(function() fpsCount = fpsCount + 1 end)
+
 task.spawn(function()
-    local lastTick, frames = tick(), 0
-    while task.wait(0.1) do
-        frames = frames + 1
-        if tick() - lastTick >= 0.5 then
-            local cpuTime = math.floor(Stats.PerformanceStats.CPU:GetValue() * 100) / 100
-            FPSL.Text = "FPS: " .. math.floor(frames / 0.5)
-            PingL.Text = "Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms"
-            CPUL.Text = "CPU: " .. cpuTime .. "ms"
-            frames = 0; lastTick = tick()
-        end
+    while task.wait(1) do
+        local cpuTime = math.floor(Stats.PerformanceStats.CPU:GetValue() * 100) / 100
+        FPSL.Text = "FPS: " .. fpsCount
+        PingL.Text = "Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms"
+        CPUL.Text = "CPU: " .. cpuTime .. "ms"
+        fpsCount = 0
     end
 end)
 
@@ -82,7 +81,7 @@ local Window = WindUI:CreateWindow({
     OpenButton = { Enabled = true, Title = "Open Flow", Color = ColorSequence.new(Color3.fromHex("#00B4D8"), Color3.fromHex("#03045E")) }
 })
 
--- Header Version & Executor (Pojok Kanan Atas UI)
+-- Header Version & Executor
 local headerInfo = Instance.new("TextLabel", Window.MainFrame)
 headerInfo.Size = UDim2.new(0, 200, 0, 20)
 headerInfo.Position = UDim2.new(1, -210, 0, 10)
@@ -108,15 +107,27 @@ local Tabs = {
 
 -- [MAIN]
 Tabs.Main:Section({ Title = "Project Credits" })
-Tabs.Main:Paragraph({ Title = "Developers", Content = "Dapz, Theo, Mon" })
+Tabs.Main:Section({ Title = "• Author: Atomic Community\n• Developers: Dapz, Theo, Mon", TextSize = 14 })
+
+Tabs.Main:Section({ Title = "System Information" })
+Tabs.Main:Section({ Title = "• Version: 1.2.5 Final\n• Executor: " .. execName, TextSize = 14 })
+
+Tabs.Main:Button({
+    Title = "Discord Server", Icon = "solar:link-bold",
+    Callback = function()
+        setclipboard("https://discord.gg/wVr9r3tCmT")
+        WindUI:Notify({Title="Flow Hub", Content="Link copied to clipboard!", Duration=3})
+    end
+})
+
 Tabs.Main:Section({ Title = "Copyright" })
 Tabs.Main:Paragraph({ Title = "© 2026 Atomic Community", Content = "All Rights Reserved." })
 
 -- [INFO / CHANGELOG]
 Tabs.Info:Section({ Title = "Update Log v1.2.5" })
 Tabs.Info:Paragraph({
-    Title = "Final Patch Notes:",
-    Content = "• Fixed Rejoin Private Server (Error 773)\n• Added Search Bar to Teleport & Player\n• Added CPU Stats (ms) to Real-time GUI\n• Enhanced Webhook Embeds & Rarity Detection\n• Added Disconnect Webhook Notification\n• Fixed Mythic Rarity removal\n• Upgraded FPS Boost (Lighting & Shadows)"
+    Title = "Final Updates:",
+    Content = "- Added Rejoin & Server Hop (Low/High)\n- Added Join by JobID & Copy JobID\n- Fixed Auto-Equip Rod (Bypass fish logic)\n- Fixed Webhook attribute detection lag\n- Added Webhook Disconnect Notification\n- Fixed FPS Real-time Stats Counter\n- Added Change Avatar via ID feature\n- Removed Mythic Rarity\n- Added CPU ms to Real-time Stats"
 })
 
 -- [PLAYER]
@@ -202,9 +213,13 @@ Tabs.Utilities:Toggle({ Title = "Anti Staff", Callback = function(v) FlowConfig.
 Tabs.Utilities:Input({
     Title = "Change Avatar (ID)", Placeholder = "Enter UserID...",
     Callback = function(v)
-        if tonumber(v) then
-            LocalPlayer.CharacterAppearanceId = tonumber(v)
-            WindUI:Notify({Title="Avatar", Content="Avatar ID set to "..v..". Please reset to apply.", Duration=3})
+        local id = tonumber(v)
+        if id and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            pcall(function()
+                local desc = Players:GetHumanoidDescriptionFromUserId(id)
+                LocalPlayer.Character.Humanoid:ApplyDescription(desc)
+                WindUI:Notify({Title="Avatar System", Content="Avatar changed successfully!", Duration=3})
+            end)
         end
     end
 })
@@ -232,7 +247,12 @@ local function serverHop(targetLow)
 end
 
 Tabs.Utilities:Button({ Title = "Server Hop (Low Player)", Callback = function() serverHop(true) end })
+Tabs.Utilities:Button({ Title = "Server Hop (High Player)", Callback = function() serverHop(false) end })
 Tabs.Utilities:Button({ Title = "Copy JobID", Callback = function() setclipboard(game.JobId); WindUI:Notify({Title="JobID", Content="Copied!", Duration=2}) end })
+Tabs.Utilities:Input({
+    Title = "Join by JobID", Placeholder = "Paste JobID...",
+    Callback = function(v) if #v > 10 then TeleportService:TeleportToPlaceInstance(game.PlaceId, v, LocalPlayer) end end
+})
 
 Tabs.Utilities:Section({ Title = "Miscellaneous" })
 Tabs.Utilities:Toggle({ Title = "Real time Stats", Callback = function(v) StatsGui.Enabled = v end })
@@ -260,7 +280,7 @@ Tabs.Performance:Button({
 -- Disconnect Webhook
 game:GetService("CoreGui").ChildRemoved:Connect(function(child)
     if child.Name == Window.Title and FlowConfig.WebhookDisconnect and FlowConfig.WebhookURL ~= "" then
-        local data = {["embeds"]={{["title"]="⚠️ Client Disconnected",["description"]="Flow Hub has been closed or player left.",["color"]=0xFF0000,["fields"]={{["name"]="User",["value"]=LocalPlayer.Name,["inline"]=true}},["footer"]={["text"]="Flow Hub v1.2.5"}}}}
+        local data = {["embeds"]={{["title"]="⚠️ Client Disconnected",["description"]="Flow Hub closed or player left.",["color"]=0xFF0000,["fields"]={{["name"]="User",["value"]=LocalPlayer.Name,["inline"]=true}},["footer"]={["text"]="Flow Hub v1.2.5"}}}}
         request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)})
     end
 end)
@@ -270,7 +290,6 @@ LocalPlayer.Backpack.ChildAdded:Connect(function(item)
     if item:IsA("Tool") and not item.Name:lower():find("rod") then
         task.wait(0.5)
         local rar = item:GetAttribute("Rarity") or item:GetAttribute("rarity")
-        -- Fix Rarity Detection (Game Epic -> Discord Epic)
         if not rar and item:FindFirstChild("Rarity") then rar = item.Rarity.Value end
         rar = rar or "Common"
         
@@ -292,7 +311,11 @@ LocalPlayer.Backpack.ChildAdded:Connect(function(item)
     end
 end)
 
--- Farming Loop & Walk Water
+-- Walk Water Platform
+local waterPart = Instance.new("Part", workspace)
+waterPart.Name = "FlowWaterPlatform"; waterPart.Size = Vector3.new(20, 1, 20)
+waterPart.Transparency = 1; waterPart.Anchored = true; waterPart.CanCollide = true
+
 getgenv().FlowConnection = RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
@@ -302,6 +325,42 @@ getgenv().FlowConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- Main Background Loop
+task.spawn(function()
+    while task.wait(1) do
+        local char = LocalPlayer.Character
+        if not char then continue end
+        local hum = char:FindFirstChild("Humanoid")
+        
+        if FlowConfig.AntiDrown and hum then
+            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+            for _, v in pairs(char:GetDescendants()) do
+                if (v.Name:lower() == "oxygen" or v.Name:lower() == "o2") and (v:IsA("NumberValue") or v:IsA("IntValue")) then v.Value = 100 end
+            end
+        elseif hum then hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true) end
+
+        if FlowConfig.AutoEquip and not char:FindFirstChildWhichIsA("Tool") then
+            for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+                if item:IsA("Tool") and (item.Name:lower():find("rod") or item.Name:lower():find("kail")) then
+                    hum:EquipTool(item); break
+                end
+            end
+        end
+
+        if FlowConfig.Streamer then
+            for _, p in pairs(Players:GetPlayers()) do
+                if p.Character then
+                    for _, v in pairs(p.Character:GetDescendants()) do
+                        if v:IsA("BillboardGui") then v.Enabled = false end
+                        if v:IsA("TextLabel") and (v.Name:lower():find("name") or v.Name:lower():find("label")) then v.Visible = false end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Fishing Loop
 task.spawn(function()
     while task.wait(0.5) do
         if FlowConfig.Farming and LocalPlayer.Character and FishingSystem then
@@ -323,29 +382,4 @@ task.spawn(function()
     end
 end)
 
--- Auto Equip & Streamer Mode
-task.spawn(function()
-    while task.wait(1) do
-        local char = LocalPlayer.Character
-        if not char then continue end
-        if FlowConfig.AutoEquip and not char:FindFirstChildWhichIsA("Tool") then
-            for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                if item:IsA("Tool") and (item.Name:lower():find("rod") or item.Name:lower():find("kail")) then
-                    char.Humanoid:EquipTool(item); break
-                end
-            end
-        end
-        if FlowConfig.Streamer then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Character then
-                    for _, v in pairs(p.Character:GetDescendants()) do
-                        if v:IsA("BillboardGui") then v.Enabled = false end
-                        if v:IsA("TextLabel") and (v.Name:lower():find("name") or v.Name:lower():find("label")) then v.Visible = false end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-WindUI:Notify({Title="Flow Hub Loaded", Content="Version 1.2.5 Final is ready.", Duration=5})
+WindUI:Notify({Title="Flow Hub Final", Content="FPS Fixed. Enjoy!", Duration=5})
