@@ -1,75 +1,122 @@
--- [[ FLOW HUB | FISHING SYSTEM V1.3.3 FINAL INTEGRITY ]]
-local RunService, ReplicatedStorage, Players = game:GetService("RunService"), game:GetService("ReplicatedStorage"), game:GetService("Players")
-local LocalPlayer, TeleportService, HttpService = Players.LocalPlayer, game:GetService("TeleportService"), game:GetService("HttpService")
-local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
+-- [[ FLOW HUB | FISHING SYSTEM V1.2.5 FINAL ]]
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
+local Stats = game:GetService("Stats")
 
+-- [ CLEANUP ]
+if game.CoreGui:FindFirstChild("FlowStatsV12") then game.CoreGui.FlowStatsV12:Destroy() end
+if workspace:FindFirstChild("FlowWaterPlatform") then workspace.FlowWaterPlatform:Destroy() end
+if getgenv().FlowConnection then getgenv().FlowConnection:Disconnect() end
+
+local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
+local AnimController = FishingSystem and require(FishingSystem.FishingModules:WaitForChild("AnimationController"))
+local request = (syn and syn.request) or (http and http.request) or http_request or request or HttpService.RequestAsync
+
+-- [ CONFIGURATION ]
 getgenv().FlowConfig = {
-    Farming=false, Delay=3.0, AutoSell=false, WalkWater=false, AntiDrown=false,
-    AutoEquip=false, AntiStaff=false, WebhookURL="", WebhookDisconnect=false,
-    WebhookFilters = {Common=false, Uncommon=false, Rare=false, Epic=true, Legendary=true, Secret=true}
+    Farming = false, Delay = 3.0, AutoSell = false, WalkWater = false, AntiDrown = false,
+    AutoEquip = false, Streamer = false, AntiStaff = false, WebhookURL = "",
+    WebhookFilters = {Common=false, Uncommon=false, Rare=false, Epic=true, Legendary=true, Secret=true, Mythic=true}
 }
 
--- [ANTI-STAFF KICK]
-local function checkStaff(p) if FlowConfig.AntiStaff and (p:GetRankInGroup(0) > 0) then LocalPlayer:Kick("Staff Detected: "..p.Name) end end
-Players.PlayerAdded:Connect(checkStaff)
-for _, p in pairs(Players:GetPlayers()) do checkStaff(p) end
+-- [ WEBHOOK SYSTEM ]
+local function sendWebhook(title, description, fields, color)
+    if FlowConfig.WebhookURL == "" then return end
+    local embed = {
+        ["title"] = title,
+        ["description"] = description,
+        ["color"] = color or 0x00B4D8,
+        ["fields"] = fields,
+        ["footer"] = {["text"] = "Flow Hub v1.2.5 Final"},
+        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    }
+    task.spawn(function()
+        pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode({["embeds"] = {embed}})}) end)
+    end)
+end
 
--- [UI BUILDER]
+-- [ UI LOADER ]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
-local Window = WindUI:CreateWindow({Title = "Flow Hub | v1.3.3 | Final", Folder = "FlowHubV12", Size = UDim2.fromOffset(600, 500)})
+local execName = (identifyexecutor and identifyexecutor()) or "Unknown"
+
+local Window = WindUI:CreateWindow({
+    Title = "Flow Hub | Fishing (" .. execName .. ")",
+    Folder = "FlowHubV12",
+    Size = UDim2.fromOffset(600, 480),
+    OpenButton = { Enabled = true, Title = "Open Flow" }
+})
+
+-- UI Header Info (Fixed Position)
+Window.MainFrame.Header.Title.Text = "Flow Hub v1.2.5 | " .. execName
 
 local Tabs = {
-    Main=Window:Tab({Title="Main",Icon="solar:home-bold"}), Info=Window:Tab({Title="Info",Icon="solar:info-circle-bold"}),
-    Player=Window:Tab({Title="Player",Icon="solar:user-rounded-bold"}), Fishing=Window:Tab({Title="Fishing",Icon="solar:fishing-rod-bold"}),
-    Teleport=Window:Tab({Title="Teleport",Icon="solar:map-point-wave-bold"}), Webhook=Window:Tab({Title="Webhook",Icon="solar:bell-bing-bold"}),
-    Utilities=Window:Tab({Title="Utilities",Icon="solar:settings-bold"}), Performance=Window:Tab({Title="Performance",Icon="solar:bolt-bold"})
+    Main = Window:Tab({ Title = "Main", Icon = "solar:home-bold" }),
+    Player = Window:Tab({ Title = "Player", Icon = "solar:user-rounded-bold" }),
+    Fishing = Window:Tab({ Title = "Fishing", Icon = "solar:fishing-rod-bold" }),
+    Teleport = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" }),
+    Webhook = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold" }),
+    Utilities = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
 }
 
--- [MAIN]
-Tabs.Main:Section({Title="Developer: Dapz, Theo, Mon"})
-Tabs.Main:Section({Title="Copyright © 2026 Atomic Community"})
+-- [ TABS CONTENT ]
+Tabs.Main:Paragraph({ Title = "Final Update 1.2.5", Content = "- Fixed Rarity Detection (Async Delay)\n- Added Disconnect Logger\n- Optimized UI & Performance\n- Final Polish for release." })
 
--- [INFO]
-Tabs.Info:Section({Title="Changelog v1.3.3"})
-Tabs.Info:Paragraph({Title="Full Restoration:", Content="- Restored: Webhook, Auto-Sell, Anti-Drown, Walk on Water\n- Restored: All Server Management features\n- Fixed: Mancing System (Final Polish)\n- Removed: All Mythic references"})
-Tabs.Info:Button({Title="Copy Discord Link", Callback=function() setclipboard("https://discord.gg/wVr9r3tCmT") end})
+Tabs.Player:Toggle({ Title = "Walk on Water", Callback = function(v) FlowConfig.WalkWater = v end })
+Tabs.Player:Toggle({ Title = "Anti Drown", Callback = function(v) FlowConfig.AntiDrown = v end })
 
--- [PLAYER & FISHING]
-Tabs.Player:Toggle({Title="Walk on Water", Callback=function(v) FlowConfig.WalkWater=v end})
-Tabs.Player:Toggle({Title="Anti Drown", Callback=function(v) FlowConfig.AntiDrown=v end})
-Tabs.Fishing:Toggle({Title="Auto Farm", Callback=function(v) FlowConfig.Farming=v end})
-Tabs.Fishing:Toggle({Title="Auto Equip", Callback=function(v) FlowConfig.AutoEquip=v end})
-Tabs.Fishing:Toggle({Title="Auto Sell", Callback=function(v) FlowConfig.AutoSell=v end})
+Tabs.Fishing:Toggle({ Title = "Auto Farm", Callback = function(v) FlowConfig.Farming = v end })
+Tabs.Fishing:Input({ Title = "Delay", Placeholder = "3.0", Callback = function(v) FlowConfig.Delay = tonumber(v) or 3.0 end })
+Tabs.Fishing:Toggle({ Title = "Auto Sell", Callback = function(v) FlowConfig.AutoSell = v end })
 
--- [WEBHOOK & UTILITIES]
-Tabs.Webhook:Input({Title="Webhook URL", Callback=function(v) FlowConfig.WebhookURL=v end})
-Tabs.Webhook:Toggle({Title="Notify Disconnect", Callback=function(v) FlowConfig.WebhookDisconnect=v end})
-Tabs.Utilities:Button({Title="Rejoin Server", Callback=function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end})
-Tabs.Utilities:Button({Title="Copy JobID", Callback=function() setclipboard(game.JobId) end})
-Tabs.Utilities:Input({Title="Join by JobID", Callback=function(v) if #v > 10 then TeleportService:TeleportToPlaceInstance(game.PlaceId, v, LocalPlayer) end end})
+-- [ WEBHOOK TAB ]
+Tabs.Webhook:Input({ Title = "Webhook URL", Placeholder = "Paste URL...", Callback = function(v) FlowConfig.WebhookURL = v end })
+for name, val in pairs(FlowConfig.WebhookFilters) do
+    Tabs.Webhook:Toggle({ Title = "Filter: " .. name, Default = val, Callback = function(v) FlowConfig.WebhookFilters[name] = v end })
+end
 
--- [CORE ENGINE]
+-- [ CORE LOGIC ]
+LocalPlayer.Backpack.ChildAdded:Connect(function(item)
+    if item:IsA("Tool") and not item.Name:lower():find("rod") then
+        task.spawn(function()
+            task.wait(2) -- Delay agar atribut ter-replicate dengan sempurna
+            local rar = item:GetAttribute("Rarity") or item:GetAttribute("rarity") or "Common"
+            if FlowConfig.WebhookFilters[rar] then
+                sendWebhook("🎣 New Catch!", "Fish caught successfully!", {
+                    {["name"] = "Fish", ["value"] = item.Name, ["inline"] = true},
+                    {["name"] = "Rarity", ["value"] = rar, ["inline"] = true}
+                }, 0x00FF00)
+            end
+        end)
+    end
+end)
+
+-- Disconnect Monitor
+game:BindToClose(function()
+    sendWebhook("⚠️ Disconnected", "Client has disconnected from the game.", nil, 0xFF0000)
+end)
+
+-- Main Loop
 task.spawn(function()
     while task.wait(0.5) do
         if FlowConfig.Farming and LocalPlayer.Character and FishingSystem then
             pcall(function()
                 local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-                if tool and tool.Name:lower():find("rod") then
+                if tool and (tool.Name:lower():find("rod") or tool.Name:lower():find("kail")) then
                     local root = LocalPlayer.Character.HumanoidRootPart
                     local pos = root.Position + (root.CFrame.LookVector * 15)
-                    FishingSystem.CastReplication:FireServer(pos, root.Position, tool.Name, 100)
-                    task.wait(1.5)
+                    FishingSystem.CastReplication:FireServer(pos, root.Position, tool.Name, 99.5)
+                    task.wait(1.5); FishingSystem.PrecalcFish:InvokeServer(); task.wait(0.5)
+                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
+                    task.wait(FlowConfig.Delay)
                     FishingSystem.FishGiver:FireServer({["hookPosition"]=pos})
-                    task.wait(1)
-                    FishingSystem.CleanupCast:FireServer()
+                    task.wait(1.5); FishingSystem.CleanupCast:FireServer()
                 end
             end)
-        end
-        -- Auto Features
-        local char = LocalPlayer.Character
-        if char then
-            if FlowConfig.AutoSell then pcall(function() ReplicatedStorage:FindFirstChild("SellFish", true):InvokeServer() end) end
-            if FlowConfig.AntiDrown then for _, v in pairs(char:GetDescendants()) do if v.Name == "Oxygen" then v.Value = 100 end end end
         end
     end
 end)
