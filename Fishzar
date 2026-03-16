@@ -4,9 +4,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
 local VirtualUser = game:GetService("VirtualUser")
-local Stats = game:GetService("Stats")
 
 -- [ CLEANUP ]
 if game.CoreGui:FindFirstChild("FlowStatsV12") then game.CoreGui.FlowStatsV12:Destroy() end
@@ -24,35 +24,36 @@ getgenv().FlowConfig = {
     WebhookFilters = {Common=false, Uncommon=false, Rare=false, Epic=true, Legendary=true, Secret=true, Mythic=true}
 }
 
--- [ WEBHOOK SYSTEM ]
-local function sendWebhook(title, description, fields, color)
-    if FlowConfig.WebhookURL == "" then return end
-    local embed = {
-        ["title"] = title,
-        ["description"] = description,
-        ["color"] = color or 0x00B4D8,
-        ["fields"] = fields,
-        ["footer"] = {["text"] = "Flow Hub v1.2.5 Final"},
-        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-    }
-    task.spawn(function()
-        pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode({["embeds"] = {embed}})}) end)
-    end)
-end
+-- [ UI STATS ]
+local StatsGui = Instance.new("ScreenGui", game.CoreGui)
+StatsGui.Name = "FlowStatsV12"; StatsGui.Enabled = false
+local StatsFrame = Instance.new("Frame", StatsGui)
+StatsFrame.Size = UDim2.new(0, 220, 0, 45); StatsFrame.Position = UDim2.new(0.5, -110, 0, 15)
+StatsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15); StatsFrame.Active = true; StatsFrame.Draggable = true
+Instance.new("UICorner", StatsFrame).CornerRadius = UDim.new(0, 10)
+Instance.new("UIStroke", StatsFrame).Color = Color3.fromRGB(0, 180, 216)
+local PingL = Instance.new("TextLabel", StatsFrame); PingL.Size = UDim2.new(0.5, 0, 1, 0); PingL.Position = UDim2.new(0, 12, 0, 0); PingL.BackgroundTransparency = 1; PingL.TextColor3 = Color3.new(1,1,1); PingL.Font = Enum.Font.GothamBold; PingL.TextSize = 14; PingL.TextXAlignment = Enum.TextXAlignment.Left
+local FPSL = Instance.new("TextLabel", StatsFrame); FPSL.Size = UDim2.new(0.5, -12, 1, 0); FPSL.Position = UDim2.new(0.5, 0, 0, 0); FPSL.BackgroundTransparency = 1; FPSL.TextColor3 = Color3.new(1,1,1); FPSL.Font = Enum.Font.GothamBold; FPSL.TextSize = 14; FPSL.TextXAlignment = Enum.TextXAlignment.Right
 
--- [ UI LOADER ]
+task.spawn(function()
+    local lastTick, frames = tick(), 0
+    while task.wait(0.1) do
+        frames = frames + 1
+        if tick() - lastTick >= 0.5 then
+            FPSL.Text = "FPS: " .. math.floor(frames / 0.5)
+            PingL.Text = "Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+            frames = 0; lastTick = tick()
+        end
+    end
+end)
+
+-- [ UI LOAD ]
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 local execName = (identifyexecutor and identifyexecutor()) or "Unknown"
-
 local Window = WindUI:CreateWindow({
-    Title = "Flow Hub | Fishing (" .. execName .. ")",
-    Folder = "FlowHubV12",
-    Size = UDim2.fromOffset(600, 480),
-    OpenButton = { Enabled = true, Title = "Open Flow" }
+    Title = "Flow Hub | Fishing (" .. execName .. ")", Folder = "FlowHubV12", Icon = "solar:waterdrop-bold", Size = UDim2.fromOffset(600, 480),
+    OpenButton = { Enabled = true, Title = "Open Flow", Color = ColorSequence.new(Color3.fromHex("#00B4D8"), Color3.fromHex("#03045E")) }
 })
-
--- UI Header Info (Fixed Position)
-Window.MainFrame.Header.Title.Text = "Flow Hub v1.2.5 | " .. execName
 
 local Tabs = {
     Main = Window:Tab({ Title = "Main", Icon = "solar:home-bold" }),
@@ -60,47 +61,61 @@ local Tabs = {
     Fishing = Window:Tab({ Title = "Fishing", Icon = "solar:fishing-rod-bold" }),
     Teleport = Window:Tab({ Title = "Teleport", Icon = "solar:map-point-wave-bold" }),
     Webhook = Window:Tab({ Title = "Webhook", Icon = "solar:bell-bing-bold" }),
-    Utilities = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" })
+    Utilities = Window:Tab({ Title = "Utilities", Icon = "solar:settings-bold" }),
+    Performance = Window:Tab({ Title = "Performance", Icon = "solar:bolt-bold" })
 }
 
--- [ TABS CONTENT ]
-Tabs.Main:Paragraph({ Title = "Final Update 1.2.5", Content = "- Fixed Rarity Detection (Async Delay)\n- Added Disconnect Logger\n- Optimized UI & Performance\n- Final Polish for release." })
+-- [ TAB CONTENT ]
+Tabs.Main:Section({ Title = "Version: 1.2.5 Final | Exec: " .. execName })
+Tabs.Main:Paragraph({ Title = "Changelog", Content = "- Rarity fixed\n- Webhook disconnect enabled\n- All tabs restored" })
 
 Tabs.Player:Toggle({ Title = "Walk on Water", Callback = function(v) FlowConfig.WalkWater = v end })
 Tabs.Player:Toggle({ Title = "Anti Drown", Callback = function(v) FlowConfig.AntiDrown = v end })
+Tabs.Player:Toggle({ Title = "Auto Equip", Callback = function(v) FlowConfig.AutoEquip = v end })
 
 Tabs.Fishing:Toggle({ Title = "Auto Farm", Callback = function(v) FlowConfig.Farming = v end })
 Tabs.Fishing:Input({ Title = "Delay", Placeholder = "3.0", Callback = function(v) FlowConfig.Delay = tonumber(v) or 3.0 end })
 Tabs.Fishing:Toggle({ Title = "Auto Sell", Callback = function(v) FlowConfig.AutoSell = v end })
 
--- [ WEBHOOK TAB ]
-Tabs.Webhook:Input({ Title = "Webhook URL", Placeholder = "Paste URL...", Callback = function(v) FlowConfig.WebhookURL = v end })
-for name, val in pairs(FlowConfig.WebhookFilters) do
-    Tabs.Webhook:Toggle({ Title = "Filter: " .. name, Default = val, Callback = function(v) FlowConfig.WebhookFilters[name] = v end })
+local function getPlrs() local t = {} for _,p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then table.insert(t, p.Name) end end return t end
+Tabs.Teleport:Dropdown({ Title = "Player List", Values = getPlrs(), Search = true, Callback = function(v) 
+    local target = Players:FindFirstChild(v)
+    if target and target.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame end
+end })
+
+Tabs.Webhook:Input({ Title = "Webhook URL", Placeholder = "Paste Here...", Callback = function(v) FlowConfig.WebhookURL = v end })
+for n, val in pairs(FlowConfig.WebhookFilters) do
+    Tabs.Webhook:Toggle({ Title = "Filter: " .. n, Default = val, Callback = function(v) FlowConfig.WebhookFilters[n] = v end })
 end
 
--- [ CORE LOGIC ]
+Tabs.Utilities:Button({ Title = "Rejoin Server", Callback = function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end })
+Tabs.Utilities:Toggle({ Title = "Show Stats UI", Callback = function(v) StatsGui.Enabled = v end })
+
+-- [ WEBHOOK & DISCONNECT CORE ]
+local function sendWebhook(title, desc)
+    if FlowConfig.WebhookURL == "" then return end
+    local data = {["embeds"]={{["title"]=title, ["description"]=desc, ["color"]=0x00B4D8}}}
+    request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)})
+end
+
 LocalPlayer.Backpack.ChildAdded:Connect(function(item)
     if item:IsA("Tool") and not item.Name:lower():find("rod") then
         task.spawn(function()
-            task.wait(2) -- Delay agar atribut ter-replicate dengan sempurna
+            task.wait(2) -- Delay mutlak untuk fix rarity bug
             local rar = item:GetAttribute("Rarity") or item:GetAttribute("rarity") or "Common"
             if FlowConfig.WebhookFilters[rar] then
-                sendWebhook("🎣 New Catch!", "Fish caught successfully!", {
-                    {["name"] = "Fish", ["value"] = item.Name, ["inline"] = true},
-                    {["name"] = "Rarity", ["value"] = rar, ["inline"] = true}
-                }, 0x00FF00)
+                sendWebhook("🎣 New Catch: "..item.Name, "Rarity: "..rar)
             end
         end)
     end
 end)
 
--- Disconnect Monitor
-game:BindToClose(function()
-    sendWebhook("⚠️ Disconnected", "Client has disconnected from the game.", nil, 0xFF0000)
+-- Notifikasi Disconnect
+LocalPlayer.AncestryChanged:Connect(function(_, parent)
+    if not parent then sendWebhook("⚠️ Disconnected", "Client terputus dari server.") end
 end)
 
--- Main Loop
+-- Loop Utama (Farming)
 task.spawn(function()
     while task.wait(0.5) do
         if FlowConfig.Farming and LocalPlayer.Character and FishingSystem then
