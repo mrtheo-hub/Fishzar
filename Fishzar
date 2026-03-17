@@ -1,4 +1,5 @@
 -- [[ FLOW HUB | FISHING SYSTEM V1.2.5 FINAL ]]
+-- Owner: Dapz | Developer: Theo & Mon
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -129,9 +130,9 @@ Tabs.Main:Section({ Title = "© 2026 Flow Hub - All Rights Reserved.", TextSize 
 
 -- [INFO / CHANGELOG]
 Tabs.Info:Section({ Title = "Final Updates v1.2.5:" })
-Tabs.Info:Section({ Title = "✅ Local Avatar Mapping (Bypass Server)", TextSize = 13 })
+Tabs.Info:Section({ Title = "✅ Fixed Disconnect Webhook Detection", TextSize = 13 })
+Tabs.Info:Section({ Title = "✅ Avatar Accessories Properly Attached", TextSize = 13 })
 Tabs.Info:Section({ Title = "✅ Real Time Stats Moved to Misc", TextSize = 13 })
-Tabs.Info:Section({ Title = "✅ Rarity Filter Toggles added", TextSize = 13 })
 Tabs.Info:Section({ Title = "✅ Auto Sell Restored", TextSize = 13 })
 Tabs.Info:Section({ Title = "✅ Webhook Embed Fully Upgraded", TextSize = 13 })
 
@@ -208,14 +209,23 @@ Tabs.Utilities:Input({
         if id and LocalPlayer.Character then
             pcall(function()
                 local char = LocalPlayer.Character
+                local hum = char:FindFirstChild("Humanoid")
+                if not hum then return end
+                
                 local model = Players:CreateHumanoidModelFromUserId(id)
                 
-                -- Copy Accessories & Clothing
+                -- Clear current accessories and clothing
                 for _, obj in pairs(char:GetChildren()) do
                     if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then obj:Destroy() end
                 end
+                
+                -- Attach new ones properly
                 for _, obj in pairs(model:GetChildren()) do
-                    if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then obj:Clone().Parent = char end
+                    if obj:IsA("Accessory") then
+                        hum:AddAccessory(obj:Clone()) -- Pake AddAccessory biar beneran nempel di karakter
+                    elseif obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then
+                        obj:Clone().Parent = char
+                    end
                 end
                 
                 -- Copy Body Colors
@@ -231,8 +241,9 @@ Tabs.Utilities:Input({
                     local newFace = newHead:FindFirstChildOfClass("Decal")
                     if face and newFace then face.Texture = newFace.Texture end
                 end
+                
                 model:Destroy()
-                WindUI:Notify({Title="Avatar System", Content="Avatar locally mapped!", Duration=3})
+                WindUI:Notify({Title="Avatar System", Content="Full Avatar Mapped!", Duration=3})
             end)
         end
     end
@@ -276,13 +287,14 @@ Tabs.Performance:Button({
 
 -- [[ CORE LOGIC ]]
 
-game:GetService("CoreGui").ChildRemoved:Connect(function(child)
-    if child.Name == Window.Title and FlowConfig.WebhookDisconnect and FlowConfig.WebhookURL ~= "" then
+-- Disconnect / Server Shutdown Detector
+local function SendDisconnectWebhook()
+    if FlowConfig.WebhookDisconnect and FlowConfig.WebhookURL ~= "" then
         local data = {
             ["content"] = "@everyone",
             ["embeds"] = {{
-                ["title"] = "⚠️ Client Disconnected",
-                ["description"] = "Flow Hub has detected a disconnection.",
+                ["title"] = "⚠️ Client Disconnected / Server Closed",
+                ["description"] = "Flow Hub has detected an error or disconnection.",
                 ["color"] = 0xFF0000,
                 ["fields"] = {
                     {["name"] = "👤 User", ["value"] = LocalPlayer.Name, ["inline"] = true},
@@ -292,9 +304,24 @@ game:GetService("CoreGui").ChildRemoved:Connect(function(child)
                 ["footer"] = {["text"] = "Flow Hub v1.2.5 | " .. os.date("%I:%M %p")}
             }}
         }
-        request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)})
+        pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
     end
+end
+
+-- Deteksi layar error bawaan Roblox
+game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+    SendDisconnectWebhook()
 end)
+
+local promptOverlay = game:GetService("CoreGui"):FindFirstChild("RobloxPromptGui")
+if promptOverlay then
+    local overlay = promptOverlay:FindFirstChild("promptOverlay")
+    if overlay then
+        overlay.ChildAdded:Connect(function(child)
+            if child.Name == "ErrorPrompt" then SendDisconnectWebhook() end
+        end)
+    end
+end
 
 LocalPlayer.Backpack.ChildAdded:Connect(function(item)
     if item:IsA("Tool") and not item.Name:lower():find("rod") then
