@@ -1,446 +1,182 @@
 -- [[ FLOW HUB | FISHING SYSTEM ]]
--- Owner: Dapz | Developer: Theo & Mon
+-- Owner: Dapz | Developer: Alfer1427 (Theo) & Mon
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
-local Stats = game:GetService("Stats")
 local TeleportService = game:GetService("TeleportService")
-local Lighting = game:GetService("Lighting")
 
 -- [ CLEANUP SYSTEM ]
-if game.CoreGui:FindFirstChild("FlowStatsV12") then game.CoreGui.FlowStatsV12:Destroy() end
-if workspace:FindFirstChild("FlowWaterPlatform") then workspace.FlowWaterPlatform:Destroy() end
 if getgenv().FlowConnection then getgenv().FlowConnection:Disconnect() end
-if OrionLib then OrionLib:Destroy() end -- Cleanup existing Orion
-
-local FishingSystem = ReplicatedStorage:WaitForChild("FishingSystem", 10)
-local AnimController = FishingSystem and require(FishingSystem.FishingModules:WaitForChild("AnimationController"))
-local request = (syn and syn.request) or (http and http.request) or http_request or request or HttpService.RequestAsync
 
 -- [[ CONFIGURATION ]]
 getgenv().FlowConfig = {
     Farming = false, Delay = 3.0, AutoSell = false, WalkWater = false, AntiDrown = false,
-    AutoEquip = false, Streamer = false, AntiStaff = false, WebhookURL = "",
-    WebhookDisconnect = false,
+    AutoEquip = false, WebhookURL = "", WebhookDisconnect = false,
     WebhookFilters = {Common=false, Uncommon=false, Rare=false, Epic=true, Legendary=true, Secret=true}
 }
 
+-- [ LOKASI TELEPORT (> 5 LOKASI) ]
 local Islands = {
-    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256), ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833),
-    ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706), ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
-    ["Pulau Pedalaman Posei"] = Vector3.new(-861, -367, -1283), ["Megalodon Zone"] = Vector3.new(3125, 9, -1713)
+    ["Pulau Nelayan"] = Vector3.new(-34, 14, 256), 
+    ["Pulau Aquarist"] = Vector3.new(-2032, 13, -833),
+    ["Pulau Crystaliz"] = Vector3.new(214, 14, -2706), 
+    ["Gua Crystaliz"] = Vector3.new(171, -142, -4938),
+    ["Pulau Pedalaman Posei"] = Vector3.new(-861, -367, -1283), 
+    ["Megalodon Zone"] = Vector3.new(3125, 9, -1713),
 }
 
-local function getPlayerLocation()
-    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return "Unknown" end
-    local rootPos = LocalPlayer.Character.HumanoidRootPart.Position
-    local closest, minDist = "Ocean/Unknown", math.huge
-    for name, pos in pairs(Islands) do
-        local dist = (rootPos - pos).Magnitude
-        if dist < minDist then minDist = dist; closest = name end
+-- [[ FLUENT UI LOAD ]]
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Flow Hub",
+    SubTitle = "Fishing System V1.2.5",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false, -- Dimatikan agar lebih ringan di HP
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.RightControl
+})
+
+-- [[ TABS PENGATURAN ]]
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Info = Window:AddTab({ Title = "Info", Icon = "info" }),
+    Player = Window:AddTab({ Title = "Player", Icon = "user" }),
+    Fishing = Window:AddTab({ Title = "Fishing", Icon = "anchor" }),
+    Teleport = Window:AddTab({ Title = "Teleport", Icon = "map" }),
+    Webhook = Window:AddTab({ Title = "Webhook", Icon = "bell" })
+}
+
+-- [ INFO TAB ]
+Tabs.Info:AddParagraph({
+    Title = "Flow Hub Ownership",
+    Content = "Owner: Dapz\nDeveloper: Theo & Mon"
+})
+Tabs.Info:AddParagraph({
+    Title = "Status",
+    Content = "Migrasi UI ke Fluent berhasil. Tidak ada sangkut paut dengan komunitas lama, sepenuhnya milik Flow Hub."
+})
+
+-- [ MAIN TAB ]
+Tabs.Main:AddParagraph({
+    Title = "Selamat Datang!",
+    Content = "Pastikan executor berjalan stabil. Gunakan fitur Webhook untuk memantau hasil pancingan dari Discord."
+})
+Tabs.Main:AddButton({
+    Title = "Salin Discord Link",
+    Description = "Bergabung ke server Flow Hub",
+    Callback = function()
+        setclipboard("https://discord.gg/flowhub")
+        Fluent:Notify({ Title = "Tersalin", Content = "Link Discord disalin ke clipboard!", Duration = 3 })
     end
-    return (minDist < 600) and closest or "Ocean/Unknown"
-end
+})
 
--- [[ UI STATS LOGIC ]]
-local StatsGui = Instance.new("ScreenGui", game.CoreGui)
-StatsGui.Name = "FlowStatsV12"
-StatsGui.Enabled = false
+-- [ PLAYER TAB ]
+local lockedY = nil
+Tabs.Player:AddToggle("WalkWater", { Title = "Walk on Water", Default = false }):OnChanged(function(v)
+    FlowConfig.WalkWater = v
+    if v and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        lockedY = LocalPlayer.Character.HumanoidRootPart.Position.Y - 3.2
+    else lockedY = nil end
+end)
 
-local StatsFrame = Instance.new("Frame", StatsGui)
-StatsFrame.Size = UDim2.new(0, 260, 0, 45)
-StatsFrame.Position = UDim2.new(0.5, -130, 0, 15)
-StatsFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-StatsFrame.Active = true; StatsFrame.Draggable = true
-Instance.new("UICorner", StatsFrame).CornerRadius = UDim.new(0, 10)
-Instance.new("UIStroke", StatsFrame).Color = Color3.fromRGB(0, 180, 216)
+Tabs.Player:AddToggle("AntiDrown", { Title = "Anti Drown", Default = false }):OnChanged(function(v)
+    FlowConfig.AntiDrown = v
+end)
 
-local PingL = Instance.new("TextLabel", StatsFrame)
-PingL.Size = UDim2.new(0.33, 0, 1, 0); PingL.Position = UDim2.new(0, 10, 0, 0)
-PingL.BackgroundTransparency = 1; PingL.TextColor3 = Color3.new(1,1,1)
-PingL.Font = Enum.Font.GothamBold; PingL.TextSize = 12; PingL.TextXAlignment = Enum.TextXAlignment.Left
+Tabs.Player:AddToggle("AutoEquip", { Title = "Auto Equip Rod", Default = false }):OnChanged(function(v)
+    FlowConfig.AutoEquip = v
+end)
 
-local CPUL = Instance.new("TextLabel", StatsFrame)
-CPUL.Size = UDim2.new(0.33, 0, 1, 0); CPUL.Position = UDim2.new(0.33, 0, 0, 0)
-CPUL.BackgroundTransparency = 1; CPUL.TextColor3 = Color3.new(0.9,0.9,0.9)
-CPUL.Font = Enum.Font.GothamBold; CPUL.TextSize = 12
+-- [ FISHING TAB ]
+Tabs.Fishing:AddToggle("AutoFarm", { Title = "Auto Farm", Default = false }):OnChanged(function(v)
+    FlowConfig.Farming = v
+end)
 
-local FPSL = Instance.new("TextLabel", StatsFrame)
-FPSL.Size = UDim2.new(0.33, -10, 1, 0); FPSL.Position = UDim2.new(0.66, 0, 0, 0)
-FPSL.BackgroundTransparency = 1; FPSL.TextColor3 = Color3.new(1,1,1)
-FPSL.Font = Enum.Font.GothamBold; FPSL.TextSize = 12; FPSL.TextXAlignment = Enum.TextXAlignment.Right
+Tabs.Fishing:AddInput("FarmDelay", {
+    Title = "Cast Delay",
+    Default = "3.0",
+    Numeric = true,
+    Finished = true,
+    Callback = function(v) FlowConfig.Delay = tonumber(v) or 3.0 end
+})
 
-local fpsCount = 0
-RunService.RenderStepped:Connect(function() fpsCount = fpsCount + 1 end)
+Tabs.Fishing:AddToggle("AutoSell", { Title = "Auto Sell Fish", Default = false }):OnChanged(function(v)
+    FlowConfig.AutoSell = v
+end)
 
-task.spawn(function()
-    while task.wait(1) do
-        local cpuTime = math.floor(Stats.PerformanceStats.CPU:GetValue() * 100) / 100
-        FPSL.Text = "FPS: " .. fpsCount
-        PingL.Text = "Ping: " .. math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) .. "ms"
-        CPUL.Text = "CPU: " .. cpuTime .. "ms"
-        fpsCount = 0
+-- [ TELEPORT TAB ]
+local islandNames = {}
+for name, _ in pairs(Islands) do table.insert(islandNames, name) end
+
+Tabs.Teleport:AddDropdown("TeleLocation", {
+    Title = "Teleport ke Pulau",
+    Values = islandNames,
+    Multi = false,
+    Default = nil,
+}):OnChanged(function(v)
+    if Islands[v] and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then 
+        LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v] + Vector3.new(0, 5, 0)) 
     end
 end)
 
--- [[ ORION UI LOAD ]]
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexsoftware/Orion/main/source')))()
-local execName = (identifyexecutor and identifyexecutor()) or "Unknown"
-
-local Window = OrionLib:MakeWindow({
-    Name = "Flow Hub | Fishing", 
-    HidePremium = false, 
-    SaveConfig = false, 
-    IntroText = "Flow Hub UI Loading...",
-    IntroIcon = "rbxassetid://4483345998"
-})
-
-local Tabs = {
-    Main = Window:MakeTab({ Name = "Main", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Player = Window:MakeTab({ Name = "Player", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Fishing = Window:MakeTab({ Name = "Fishing", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Teleport = Window:MakeTab({ Name = "Teleport", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Webhook = Window:MakeTab({ Name = "Webhook", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Utilities = Window:MakeTab({ Name = "Utilities", Icon = "rbxassetid://4483345998", PremiumOnly = false }),
-    Performance = Window:MakeTab({ Name = "Performance", Icon = "rbxassetid://4483345998", PremiumOnly = false })
-}
-
--- [MAIN]
-Tabs.Main:AddParagraph("Project Credits", "Owner: Dapz\nDeveloper: Theo & Mon")
-Tabs.Main:AddParagraph("System Information", "Version: Orion Migration\nExecutor: " .. execName)
-Tabs.Main:AddButton({ Name = "Copy Discord Server", Callback = function() setclipboard("https://discord.gg/wVr9r3tCmT") end })
-Tabs.Main:AddParagraph("Copyright", "© 2026 Flow Hub - All Rights Reserved.")
-
--- [PLAYER]
-local lockedY = nil
-Tabs.Player:AddToggle({ 
-    Name = "Walk on Water", 
-    Default = false,
-    Callback = function(v) 
-        FlowConfig.WalkWater = v 
-        if v and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            lockedY = LocalPlayer.Character.HumanoidRootPart.Position.Y - 3.2
-        else lockedY = nil end
-    end 
-})
-Tabs.Player:AddToggle({ Name = "Anti Drown", Default = false, Callback = function(v) FlowConfig.AntiDrown = v end })
-Tabs.Player:AddToggle({ Name = "Auto Equip Rod", Default = false, Callback = function(v) FlowConfig.AutoEquip = v end })
-
--- [FISHING]
-Tabs.Fishing:AddToggle({ Name = "Auto Farm", Default = false, Callback = function(v) FlowConfig.Farming = v end })
-Tabs.Fishing:AddTextbox({ 
-    Name = "Delay", 
-    Default = "3.0", 
-    TextDisappear = false,
-    Callback = function(v) FlowConfig.Delay = tonumber(v) or 3.0 end 
-})
-Tabs.Fishing:AddToggle({ Name = "Auto Sell", Default = false, Callback = function(v) FlowConfig.AutoSell = v end })
-
--- [TELEPORT]
 local function getPlrs()
     local t = {}
     for _,p in pairs(Players:GetPlayers()) do if p ~= LocalPlayer then table.insert(t, p.Name) end end
     return t
 end
 
-local PlayerDropdown = Tabs.Teleport:AddDropdown({ 
-    Name = "Teleport to Player", 
-    Default = "", 
-    Options = getPlrs(), 
-    Callback = function(v)
-        local target = Players:FindFirstChild(v)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
-        end
-    end 
+local PlayerTeleDropdown = Tabs.Teleport:AddDropdown("TelePlayer", {
+    Title = "Teleport ke Player",
+    Values = getPlrs(),
+    Multi = false,
+    Default = nil,
 })
 
-Tabs.Teleport:AddButton({ Name = "Refresh Player List", Callback = function() PlayerDropdown:Refresh(getPlrs(), true) end })
+PlayerTeleDropdown:OnChanged(function(v)
+    local target = Players:FindFirstChild(v)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 3, 0)
+    end
+end)
 
-local islandNames = {} for name, _ in pairs(Islands) do table.insert(islandNames, name) end
-Tabs.Teleport:AddDropdown({ 
-    Name = "Teleport to Location", 
-    Default = "", 
-    Options = islandNames, 
-    Callback = function(v)
-        if Islands[v] and LocalPlayer.Character then LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(Islands[v] + Vector3.new(0, 5, 0)) end
-    end 
+Tabs.Teleport:AddButton({
+    Title = "Refresh Player List",
+    Callback = function()
+        PlayerTeleDropdown:SetValues(getPlrs())
+    end
 })
 
--- [WEBHOOK]
-Tabs.Webhook:AddTextbox({ 
-    Name = "Webhook URL", 
-    Default = "", 
-    TextDisappear = false,
-    Callback = function(v) FlowConfig.WebhookURL = v end 
+-- [ WEBHOOK TAB ]
+Tabs.Webhook:AddInput("WebURL", {
+    Title = "Webhook URL",
+    Default = "",
+    Finished = true,
+    Callback = function(v) FlowConfig.WebhookURL = v end
 })
-Tabs.Webhook:AddToggle({ Name = "Disconnect Ping @everyone", Default = false, Callback = function(v) FlowConfig.WebhookDisconnect = v end })
-Tabs.Webhook:AddButton({ 
-    Name = "Test Webhook", 
+
+Tabs.Webhook:AddToggle("WebDC", { Title = "Ping @everyone saat Disconnect", Default = false }):OnChanged(function(v)
+    FlowConfig.WebhookDisconnect = v
+end)
+
+Tabs.Webhook:AddButton({
+    Title = "Test Webhook",
     Callback = function()
         if FlowConfig.WebhookURL == "" then return end
-        local data = {["embeds"]={{["title"]="✅ Flow Hub Setup",["color"]=0x00B4D8,["footer"]={["text"]="Orion Update"}}}}
+        local request = (syn and syn.request) or (http and http.request) or http_request or request or HttpService.RequestAsync
+        local data = {["embeds"]={{["title"]="✅ Flow Hub Fluent",["color"]=0x00B4D8}}}
         pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
     end
 })
 
-local rarityList = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Secret"}
-for _, rar in pairs(rarityList) do
-    Tabs.Webhook:AddToggle({
-        Name = "Filter: " .. rar,
-        Default = FlowConfig.WebhookFilters[rar],
-        Callback = function(v) FlowConfig.WebhookFilters[rar] = v end
-    })
-end
-
--- [UTILITIES]
-Tabs.Utilities:AddToggle({ Name = "Streamer Mode", Default = false, Callback = function(v) FlowConfig.Streamer = v end })
-Tabs.Utilities:AddToggle({ Name = "Anti Staff", Default = false, Callback = function(v) FlowConfig.AntiStaff = v end })
-
-Tabs.Utilities:AddTextbox({
-    Name = "Change Avatar (User ID)", 
-    Default = "", 
-    TextDisappear = false,
-    Callback = function(v)
-        local id = tonumber(v)
-        if id and LocalPlayer.Character then
-            pcall(function()
-                local char = LocalPlayer.Character
-                local hum = char:FindFirstChild("Humanoid")
-                if not hum then return end
-                
-                local model = Players:CreateHumanoidModelFromUserId(id)
-                
-                -- Clear current accessories and clothing
-                for _, obj in pairs(char:GetChildren()) do
-                    if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then obj:Destroy() end
-                end
-                
-                -- Attach new ones properly
-                for _, obj in pairs(model:GetChildren()) do
-                    if obj:IsA("Accessory") then
-                        hum:AddAccessory(obj:Clone())
-                    elseif obj:IsA("Shirt") or obj:IsA("Pants") or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then
-                        obj:Clone().Parent = char
-                    end
-                end
-                
-                -- Copy Body Colors
-                local myBc = char:FindFirstChildWhichIsA("BodyColors")
-                local newBc = model:FindFirstChildWhichIsA("BodyColors")
-                if myBc and newBc then myBc:Destroy(); newBc:Clone().Parent = char end
-                
-                -- Copy Face
-                local head = char:FindFirstChild("Head")
-                local newHead = model:FindFirstChild("Head")
-                if head and newHead then
-                    local face = head:FindFirstChildOfClass("Decal")
-                    local newFace = newHead:FindFirstChildOfClass("Decal")
-                    if face and newFace then face.Texture = newFace.Texture end
-                end
-                
-                model:Destroy()
-                OrionLib:MakeNotification({Name = "Avatar Mapper", Content = "Avatar mapped successfully!", Image = "rbxassetid://4483345998", Time = 3})
-            end)
-        end
-    end
+-- Fluent Select Tab Otomatis
+Window:SelectTab(1)
+Fluent:Notify({
+    Title = "Flow Hub",
+    Content = "Fluent UI Berhasil Dimuat!",
+    Duration = 5
 })
-
-Tabs.Utilities:AddButton({ Name = "Rejoin Server", Callback = function() 
-    if #Players:GetPlayers() <= 1 then TeleportService:Teleport(game.PlaceId, LocalPlayer) else TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer) end
-end })
-
-local function serverHop(targetLow)
-    local x = {}
-    local raw = game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder="..(targetLow and "Asc" or "Desc").."&limit=100")
-    for _,v in pairs(HttpService:JSONDecode(raw).data) do
-        if v.playing and v.playing ~= v.maxPlayers and v.id ~= game.JobId then table.insert(x, v.id) end
-    end
-    if #x > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, x[math.random(1, #x)], LocalPlayer) end
-end
-
-Tabs.Utilities:AddButton({ Name = "Server Hop (Low Player)", Callback = function() serverHop(true) end })
-Tabs.Utilities:AddButton({ Name = "Server Hop (High Player)", Callback = function() serverHop(false) end })
-Tabs.Utilities:AddButton({ Name = "Copy JobID", Callback = function() setclipboard(game.JobId); OrionLib:MakeNotification({Name = "Server", Content = "JobID Copied!", Image = "rbxassetid://4483345998", Time = 3}) end })
-
-Tabs.Utilities:AddTextbox({ 
-    Name = "Join by JobID", 
-    Default = "", 
-    TextDisappear = false,
-    Callback = function(v) if #v > 10 then TeleportService:TeleportToPlaceInstance(game.PlaceId, v, LocalPlayer) end end 
-})
-
-Tabs.Utilities:AddToggle({ Name = "Real time Stats", Default = false, Callback = function(v) StatsGui.Enabled = v end })
-
--- [PERFORMANCE]
-Tabs.Performance:AddButton({
-    Name = "Super FPS Boost",
-    Callback = function()
-        Lighting.GlobalShadows = false
-        Lighting.FogEnd = 9e9
-        settings().Rendering.QualityLevel = 1
-        for _,v in pairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic; v.CastShadow = false
-            elseif v:IsA("Texture") or v:IsA("Decal") or v:IsA("ParticleEmitter") then v:Destroy() end
-        end
-    end
-})
-
--- [[ CORE LOGIC ]]
-
--- Disconnect / Server Shutdown Detector
-local function SendDisconnectWebhook()
-    if FlowConfig.WebhookDisconnect and FlowConfig.WebhookURL ~= "" then
-        local data = {
-            ["content"] = "@everyone",
-            ["embeds"] = {{
-                ["title"] = "⚠️ Client Disconnected / Server Closed",
-                ["description"] = "Flow Hub has detected an error or disconnection.",
-                ["color"] = 0xFF0000,
-                ["fields"] = {
-                    {["name"] = "👤 User", ["value"] = LocalPlayer.Name, ["inline"] = true},
-                    {["name"] = "📍 Location", ["value"] = getPlayerLocation(), ["inline"] = true},
-                    {["name"] = "🖥️ JobID", ["value"] = "```"..game.JobId.."```", ["inline"] = false}
-                },
-                ["footer"] = {["text"] = "Flow Hub | " .. os.date("%I:%M %p")}
-            }}
-        }
-        pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
-    end
-end
-
--- Deteksi layar error bawaan Roblox
-game:GetService("GuiService").ErrorMessageChanged:Connect(function() SendDisconnectWebhook() end)
-
-local promptOverlay = game:GetService("CoreGui"):FindFirstChild("RobloxPromptGui")
-if promptOverlay then
-    local overlay = promptOverlay:FindFirstChild("promptOverlay")
-    if overlay then
-        overlay.ChildAdded:Connect(function(child)
-            if child.Name == "ErrorPrompt" then SendDisconnectWebhook() end
-        end)
-    end
-end
-
-LocalPlayer.Backpack.ChildAdded:Connect(function(item)
-    if item:IsA("Tool") and not item.Name:lower():find("rod") then
-        task.wait(0.5)
-        local rar = item:GetAttribute("Rarity") or item:GetAttribute("rarity")
-        if not rar and item:FindFirstChild("Rarity") then rar = item.Rarity.Value end
-        rar = rar or "Common"
-        
-        if FlowConfig.WebhookFilters[rar] and FlowConfig.WebhookURL ~= "" then
-            local weight = item:GetAttribute("Weight") or item:GetAttribute("weight") or "N/A"
-            local mut = item:GetAttribute("Mutation") or item:GetAttribute("mutation") or "None"
-            
-            local packCount = 0
-            for _, v in pairs(LocalPlayer.Backpack:GetChildren()) do
-                if v:IsA("Tool") and not v.Name:lower():find("rod") then packCount = packCount + 1 end
-            end
-            
-            local totalStats = "N/A"
-            if LocalPlayer:FindFirstChild("leaderstats") and LocalPlayer.leaderstats:FindFirstChild("Caught") then
-                totalStats = tostring(LocalPlayer.leaderstats.Caught.Value)
-            end
-
-            local data = {
-                ["embeds"] = {{
-                    ["title"] = "🎣 New Catch Secured!",
-                    ["color"] = (rar == "Legendary" and 0xFFD700 or (rar == "Epic" and 0x9B59B6 or 0x00B4D8)),
-                    ["thumbnail"] = {["url"] = "https://www.roblox.com/headshot-thumbnail/image?userId="..LocalPlayer.UserId.."&width=420&height=420&format=png"},
-                    ["fields"] = {
-                        {["name"] = "🐟 Fish", ["value"] = "```"..item.Name.."```", ["inline"] = true},
-                        {["name"] = "✨ Rarity", ["value"] = "```"..rar.."```", ["inline"] = true},
-                        {["name"] = "⚖️ Weight", ["value"] = "```"..tostring(weight).." kg```", ["inline"] = true},
-                        {["name"] = "🧬 Mutation", ["value"] = "```"..tostring(mut).."```", ["inline"] = true},
-                        {["name"] = "🎒 Backpack", ["value"] = "```"..tostring(packCount).." Fishes```", ["inline"] = true},
-                        {["name"] = "📈 Total Caught", ["value"] = "```"..totalStats.."```", ["inline"] = true},
-                        {["name"] = "📍 Location", ["value"] = "```"..getPlayerLocation().."```", ["inline"] = false},
-                        {["name"] = "👤 Player", ["value"] = "```"..LocalPlayer.Name.."```", ["inline"] = true},
-                        {["name"] = "🖥️ JobID", ["value"] = "```"..game.JobId.."```", ["inline"] = false}
-                    },
-                    ["footer"] = {["text"] = "Flow Hub | " .. os.date("%I:%M %p")}
-                }}
-            }
-            pcall(function() request({Url = FlowConfig.WebhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = HttpService:JSONEncode(data)}) end)
-        end
-    end
-end)
-
-local waterPart = Instance.new("Part", workspace)
-waterPart.Name = "FlowWaterPlatform"; waterPart.Size = Vector3.new(20, 1, 20)
-waterPart.Transparency = 1; waterPart.Anchored = true; waterPart.CanCollide = true
-
-getgenv().FlowConnection = RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        if FlowConfig.WalkWater and lockedY then
-            waterPart.CFrame = CFrame.new(char.HumanoidRootPart.Position.X, lockedY, char.HumanoidRootPart.Position.Z)
-        else waterPart.CFrame = CFrame.new(0, -9999, 0) end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(1) do
-        local char = LocalPlayer.Character
-        if not char then continue end
-        local hum = char:FindFirstChild("Humanoid")
-        
-        if FlowConfig.AutoSell then
-            local sellRemote = ReplicatedStorage:FindFirstChild("SellFish", true) or ReplicatedStorage:FindFirstChild("Sell", true)
-            if sellRemote then pcall(function() sellRemote:InvokeServer() end) end
-        end
-
-        if FlowConfig.AntiDrown and hum then
-            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-            for _, v in pairs(char:GetDescendants()) do
-                if (v.Name:lower() == "oxygen" or v.Name:lower() == "o2") and (v:IsA("NumberValue") or v:IsA("IntValue")) then v.Value = 100 end
-            end
-        elseif hum then hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true) end
-
-        if FlowConfig.AutoEquip and not char:FindFirstChildWhichIsA("Tool") then
-            for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-                if item:IsA("Tool") and (item.Name:lower():find("rod") or item.Name:lower():find("kail")) then
-                    hum:EquipTool(item); break
-                end
-            end
-        end
-
-        if FlowConfig.Streamer then
-            for _, p in pairs(Players:GetPlayers()) do
-                if p.Character then
-                    for _, v in pairs(p.Character:GetDescendants()) do
-                        if v:IsA("BillboardGui") then v.Enabled = false end
-                        if v:IsA("TextLabel") and (v.Name:lower():find("name") or v.Name:lower():find("label")) then v.Visible = false end
-                    end
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.5) do
-        if FlowConfig.Farming and LocalPlayer.Character and FishingSystem then
-            pcall(function()
-                local tool = LocalPlayer.Character:FindFirstChildWhichIsA("Tool")
-                if tool and (tool.Name:lower():find("rod") or tool.Name:lower():find("kail")) then
-                    local root = LocalPlayer.Character.HumanoidRootPart
-                    local castPos = root.Position + (root.CFrame.LookVector * 15)
-                    if AnimController then AnimController:Play("PrepareCast", 0.1) end
-                    FishingSystem.CastReplication:FireServer(castPos, root.Position, tool.Name, 99.5)
-                    task.wait(1.5); FishingSystem.PrecalcFish:InvokeServer(); task.wait(0.5)
-                    FishingSystem.ReplicatePullAlert:FireServer("rbxassetid://76503247176490")
-                    task.wait(FlowConfig.Delay)
-                    FishingSystem.FishGiver:FireServer({["hookPosition"]=castPos})
-                    task.wait(1.0); FishingSystem.CleanupCast:FireServer()
-                end
-            end)
-        end
-    end
-end)
-
-OrionLib:Init()
