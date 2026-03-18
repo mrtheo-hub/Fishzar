@@ -1,5 +1,5 @@
 -- [[ FLOW HUB | FISHING SYSTEM V1.2.5 FINAL ]]
--- Owner: Dapz | Developer: Alfer1427 (Theo) & Mon
+-- Owner: Dapz | Developer: Theo & Mon
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -123,7 +123,7 @@ local Tabs = {
 
 -- [MAIN]
 Tabs.Main:Section({ Title = "Project Credits" })
-Tabs.Main:Section({ Title = "• Owner: Dapz\n• Developer: Alfer1427 (Theo) & Mon", TextSize = 14 })
+Tabs.Main:Section({ Title = "• Owner: Dapz\n• Developer: Theo & Mon", TextSize = 14 })
 Tabs.Main:Section({ Title = "System Information" })
 Tabs.Main:Section({ Title = "• Version: 1.2.5 Final\n• Executor: " .. execName, TextSize = 14 })
 Tabs.Main:Button({ Title = "Discord Server", Icon = "solar:link-bold", Callback = function() setclipboard("https://discord.gg/wVr9r3tCmT") end })
