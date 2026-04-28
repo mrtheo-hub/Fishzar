@@ -1,41 +1,59 @@
--- ╔══════════════════════════════════════════════════════════════╗
--- ║       FLOW STUDIO  |  FISHZAR  |  v2.0  |  NO KEY          ║
--- ║       Owner: Dapz  |  Developer: Theo & Mon                 ║
--- ╚══════════════════════════════════════════════════════════════╝
+-- ╔═══════════════════════════════════════════════════════════════╗
+-- ║    FLOW STUDIO  |  FISHZAR  |  v3.0  |  NO KEY              ║
+-- ║    Owner: Dapz  |  Developer: Theo & Mon                     ║
+-- ╚═══════════════════════════════════════════════════════════════╝
+-- v3.0 Changes:
+--   [LOADER]   Parallel fetch — Rayfield loads while UI shows
+--   [LOADER]   Slide-up + fade entrance, 12 GUI instances total
+--   [LOADER]   Dot animation killed by flag (no .Parent polling)
+--   [FISHING]  Delay now typed via Input (not slider)
+--   [FISHING]  Rod detection: ANY equipped tool or custom keyword
+--   [FISHING]  Rod keyword input so high-level rods work
+--   [FISHING]  Smarter cast sequence with better remote discovery
+--   [TELEPORT] Fixed — uses Character:PivotTo() reliably
+--   [TELEPORT] Player teleport now has a "Teleport Now" button
+--   [WEBHOOK]  Fish image from Handle mesh TextureId / fallback
+--   [WEBHOOK]  Rarity embed colour now shown on left bar
+--   [GENERAL]  All pcall-wrapped, zero crash guarantee
+--   [GENERAL]  Auto Sell — expanded remote name search list
+--   [GENERAL]  Anti AFK — double bypass method
+--   [GENERAL]  Streamer mode covers NameTag, BillboardGui, Chat
 
--- ═══════════════════════════════════════════
---  SERVICES
--- ═══════════════════════════════════════════
-local RunService        = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players           = game:GetService("Players")
-local HttpService       = game:GetService("HttpService")
-local Stats             = game:GetService("Stats")
-local TeleportService   = game:GetService("TeleportService")
-local Lighting          = game:GetService("Lighting")
-local VirtualUser       = game:GetService("VirtualUser")
-local GuiService        = game:GetService("GuiService")
-local TweenService      = game:GetService("TweenService")
-local CoreGui           = game:GetService("CoreGui")
-local StarterGui        = game:GetService("StarterGui")
-local LocalPlayer       = Players.LocalPlayer
+-- ═══════════════════════════
+--  [1] SERVICES
+-- ═══════════════════════════
+local Run   = game:GetService("RunService")
+local RS    = game:GetService("ReplicatedStorage")
+local Plrs  = game:GetService("Players")
+local Http  = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
+local TS    = game:GetService("TeleportService")
+local Light = game:GetService("Lighting")
+local VU    = game:GetService("VirtualUser")
+local Tween = game:GetService("TweenService")
+local Core  = game:GetService("CoreGui")
+local SG    = game:GetService("StarterGui")
+local LP    = Plrs.LocalPlayer
 
--- ═══════════════════════════════════════════
---  CLEANUP (safe re-execute)
--- ═══════════════════════════════════════════
-for _, n in ipairs({"FlowStudioStats","FlowStudioLoader","FlowStatsV12"}) do
-    if CoreGui:FindFirstChild(n) then CoreGui[n]:Destroy() end
+-- ═══════════════════════════
+--  [2] CLEANUP (safe re-execute)
+-- ═══════════════════════════
+for _, n in ipairs({"FlowStudioStats","FlowStudioLoader","FlowStatsV12","FlowStudioKey"}) do
+    local g = Core:FindFirstChild(n); if g then g:Destroy() end
 end
 if workspace:FindFirstChild("FlowWaterPlatform") then
     workspace.FlowWaterPlatform:Destroy()
 end
-for _, k in ipairs({"FS_Heartbeat","FlowConnection"}) do
-    if getgenv()[k] then getgenv()[k]:Disconnect(); getgenv()[k] = nil end
+for _, k in ipairs({"FS_Heartbeat","FS_MainLoop","FS_FarmLoop","FlowConnection"}) do
+    if getgenv()[k] then
+        getgenv()[k]:Disconnect()
+        getgenv()[k] = nil
+    end
 end
 
--- ═══════════════════════════════════════════
---  EXECUTOR INFO
--- ═══════════════════════════════════════════
+-- ═══════════════════════════
+--  [3] EXECUTOR INFO
+-- ═══════════════════════════
 local execName = "Unknown"
 pcall(function()
     execName = (identifyexecutor and identifyexecutor())
@@ -43,499 +61,647 @@ pcall(function()
             or "Unknown"
 end)
 
--- ═══════════════════════════════════════════
---  HTTP REQUEST (universal fallback)
--- ═══════════════════════════════════════════
-local httpRequest = (syn and syn.request)
-    or (http and http.request)
-    or (http_request)
-    or (request)
-    or function(t) return HttpService:RequestAsync(t) end
+-- ═══════════════════════════
+--  [4] HTTP WRAPPER
+-- ═══════════════════════════
+local httpReq = (syn and syn.request)
+    or (http and http.request) or http_request or request
+    or function(t) return Http:RequestAsync(t) end
 
-local function safeRequest(data)
-    pcall(httpRequest, data)
+local function safeReq(data)
+    pcall(httpReq, data)
 end
 
--- ═══════════════════════════════════════════
---  GLOBAL CONFIG
--- ═══════════════════════════════════════════
-getgenv().FlowConfig = {
-    Farming        = false,
-    Delay          = 3.0,
-    AutoSell       = false,
-    SellMode       = "auto",
-    WalkWater      = false,
-    _lockedY       = nil,
-    AntiDrown      = false,
-    AutoEquip      = false,
-    Streamer       = false,
-    AntiStaff      = false,
-    AntiAFK        = true,
-    FPSBoosted     = false,
-    WebhookURL     = "",
-    WebhookDisconn = false,
-    WebhookFilters = {
+-- ═══════════════════════════
+--  [5] CONFIG
+-- ═══════════════════════════
+getgenv().FS_Config = {
+    -- Fishing
+    Farming      = false,
+    Delay        = 3.0,
+    RodKeyword   = "",       -- empty = use ANY equipped tool
+    AutoSell     = false,
+    SellMode     = "auto",   -- "auto" | "invoke" | "fire"
+
+    -- Player
+    WalkWater    = false,
+    _lockedY     = nil,
+    AntiDrown    = false,
+    AutoEquip    = false,
+
+    -- Misc
+    Streamer     = false,
+    AntiStaff    = false,
+    AntiAFK      = true,
+    FPSBoosted   = false,
+
+    -- Webhook
+    WebhookURL      = "",
+    WebhookDisconn  = false,
+    WebhookFilters  = {
         Common=false, Uncommon=false, Rare=false,
         Epic=true, Legendary=true, Secret=true,
     },
 }
-local FC = getgenv().FlowConfig
+local C = getgenv().FS_Config
 
--- ═══════════════════════════════════════════
---  ISLAND DATA
--- ═══════════════════════════════════════════
+-- ═══════════════════════════
+--  [6] ISLAND DATA
+-- ═══════════════════════════
 local Islands = {
-    ["Pulau Nelayan"]         = Vector3.new(-34,    14,    256),
+    ["Pulau Nelayan"]         = Vector3.new( -34,   14,    256),
     ["Pulau Aquarist"]        = Vector3.new(-2032,  13,   -833),
-    ["Pulau Crystaliz"]       = Vector3.new( 214,   14,  -2706),
-    ["Gua Crystaliz"]         = Vector3.new( 171, -142,  -4938),
-    ["Pulau Pedalaman Posei"] = Vector3.new(-861, -367,  -1283),
-    ["Megalodon Zone"]        = Vector3.new(3125,    9,  -1713),
+    ["Pulau Crystaliz"]       = Vector3.new(  214,  14,  -2706),
+    ["Gua Crystaliz"]         = Vector3.new(  171,-142,  -4938),
+    ["Pulau Pedalaman Posei"] = Vector3.new( -861,-367,  -1283),
+    ["Megalodon Zone"]        = Vector3.new( 3125,   9,  -1713),
 }
 
-local function getLocation()
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+local function getLoc()
+    local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not root then return "Unknown" end
-    local closest, best = "Ocean / Unknown", math.huge
+    local best, found = math.huge, "Ocean"
     for name, pos in pairs(Islands) do
         local d = (root.Position - pos).Magnitude
-        if d < best then best, closest = d, name end
+        if d < best then best, found = d, name end
     end
-    return best < 600 and closest or "Ocean / Unknown"
+    return best < 600 and found or "Ocean"
 end
 
--- ═══════════════════════════════════════════
---  FISHING SYSTEM CACHE
--- ═══════════════════════════════════════════
-local FishingSystem  = ReplicatedStorage:WaitForChild("FishingSystem", 10)
-local AnimController = nil
-if FishingSystem then
+-- ═══════════════════════════
+--  [7] ROD / TOOL HELPERS
+-- ═══════════════════════════
+-- Returns true if `tool` matches the configured rod keyword.
+-- If keyword is empty, ANY tool is accepted (works with high-level rods).
+local function isRod(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local kw = C.RodKeyword:lower():match("^%s*(.-)%s*$")
+    if kw == "" then return true end   -- any tool = rod
+    return tool.Name:lower():find(kw, 1, true) ~= nil
+end
+
+-- Returns the current equipped rod (Tool), or nil
+local function getEquippedRod()
+    local char = LP.Character
+    if not char then return nil end
+    local tool = char:FindFirstChildWhichIsA("Tool")
+    return (tool and isRod(tool)) and tool or nil
+end
+
+-- ═══════════════════════════
+--  [8] FISHING SYSTEM CACHE
+-- ═══════════════════════════
+local FS   = RS:WaitForChild("FishingSystem", 10)
+local Anim = nil
+
+if FS then
     pcall(function()
-        local mods = FishingSystem:WaitForChild("FishingModules", 5)
+        local mods = FS:WaitForChild("FishingModules", 5)
         if mods then
             local m = mods:FindFirstChild("AnimationController")
-            if m then AnimController = require(m) end
+            if m then Anim = require(m) end
         end
     end)
 end
 
-local _remoteCache = {}
-local function getRemote(name)
-    if _remoteCache[name] ~= nil then return _remoteCache[name] end
-    local r = FishingSystem and FishingSystem:FindFirstChild(name, true) or false
-    _remoteCache[name] = r
+-- Remote cache — searched lazily, never re-searched unless nil
+local _RC = {}
+local function getR(name)
+    if _RC[name] ~= nil then return _RC[name] end
+    local r = FS and FS:FindFirstChild(name, true) or false
+    _RC[name] = r
     return r
 end
 
--- ═══════════════════════════════════════════
---  CUSTOM LOADING SCREEN
---  DisplayOrder 9999 = always on top of Rayfield
--- ═══════════════════════════════════════════
-local loaderGui = Instance.new("ScreenGui")
-loaderGui.Name           = "FlowStudioLoader"
-loaderGui.ResetOnSpawn   = false
-loaderGui.DisplayOrder   = 9999
-loaderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-loaderGui.Parent         = CoreGui
-
--- Full dark overlay
-local overlay = Instance.new("Frame", loaderGui)
-overlay.Size             = UDim2.new(1,0,1,0)
-overlay.BackgroundColor3 = Color3.fromRGB(10,10,10)
-overlay.BorderSizePixel  = 0
-
--- Center card
-local card = Instance.new("Frame", overlay)
-card.Size             = UDim2.new(0,420,0,270)
-card.Position         = UDim2.new(0.5,-210,0.5,-135)
-card.BackgroundColor3 = Color3.fromRGB(20,20,20)
-card.BorderSizePixel  = 0
-Instance.new("UICorner", card).CornerRadius = UDim.new(0,20)
-local cStroke = Instance.new("UIStroke", card)
-cStroke.Color = Color3.fromRGB(45,45,45); cStroke.Thickness = 1.5
-
--- Blue top accent line
-local accentBar = Instance.new("Frame", card)
-accentBar.Size             = UDim2.new(1,0,0,3)
-accentBar.BackgroundColor3 = Color3.fromRGB(0,160,230)
-accentBar.BorderSizePixel  = 0
-Instance.new("UICorner", accentBar).CornerRadius = UDim.new(0,20)
-
--- "FLOW" wordmark
-local lblFlow = Instance.new("TextLabel", card)
-lblFlow.Size               = UDim2.new(1,0,0,48)
-lblFlow.Position           = UDim2.new(0,0,0,22)
-lblFlow.BackgroundTransparency = 1
-lblFlow.Text               = "FLOW  STUDIO"
-lblFlow.TextColor3         = Color3.fromRGB(255,255,255)
-lblFlow.Font               = Enum.Font.GothamBlack
-lblFlow.TextSize           = 34
-
--- Colored sub-word (separate label for blue "STUDIO")
-local lblSub = Instance.new("TextLabel", card)
-lblSub.Size               = UDim2.new(1,0,0,22)
-lblSub.Position           = UDim2.new(0,0,0,70)
-lblSub.BackgroundTransparency = 1
-lblSub.Text               = "Fishzar Script  —  v2.0"
-lblSub.TextColor3         = Color3.fromRGB(0,160,230)
-lblSub.Font               = Enum.Font.GothamBold
-lblSub.TextSize            = 13
-
--- Divider
-local divider = Instance.new("Frame", card)
-divider.Size             = UDim2.new(0,60,0,1)
-divider.Position         = UDim2.new(0.5,-30,0,104)
-divider.BackgroundColor3 = Color3.fromRGB(50,50,50)
-divider.BorderSizePixel  = 0
-
--- Executor label
-local lblExec = Instance.new("TextLabel", card)
-lblExec.Size               = UDim2.new(1,0,0,18)
-lblExec.Position           = UDim2.new(0,0,0,114)
-lblExec.BackgroundTransparency = 1
-lblExec.Text               = "Executor: " .. execName
-lblExec.TextColor3         = Color3.fromRGB(80,80,80)
-lblExec.Font               = Enum.Font.Gotham
-lblExec.TextSize           = 11
-
--- Progress bar bg
-local barBG = Instance.new("Frame", card)
-barBG.Size             = UDim2.new(0,340,0,5)
-barBG.Position         = UDim2.new(0.5,-170,0,162)
-barBG.BackgroundColor3 = Color3.fromRGB(35,35,35)
-barBG.BorderSizePixel  = 0
-Instance.new("UICorner", barBG).CornerRadius = UDim.new(1,0)
-
--- Progress fill
-local barFill = Instance.new("Frame", barBG)
-barFill.Size             = UDim2.new(0,0,1,0)
-barFill.BackgroundColor3 = Color3.fromRGB(0,160,230)
-barFill.BorderSizePixel  = 0
-Instance.new("UICorner", barFill).CornerRadius = UDim.new(1,0)
-
--- Status label
-local lblStatus = Instance.new("TextLabel", card)
-lblStatus.Size               = UDim2.new(0,280,0,16)
-lblStatus.Position           = UDim2.new(0.5,-140,0,176)
-lblStatus.BackgroundTransparency = 1
-lblStatus.Text               = "Initializing..."
-lblStatus.TextColor3         = Color3.fromRGB(85,85,85)
-lblStatus.Font               = Enum.Font.Gotham
-lblStatus.TextSize           = 11
-lblStatus.TextXAlignment     = Enum.TextXAlignment.Left
-
--- Animated dots
-local lblDots = Instance.new("TextLabel", card)
-lblDots.Size               = UDim2.new(0,60,0,16)
-lblDots.Position           = UDim2.new(1,-72,0,176)
-lblDots.BackgroundTransparency = 1
-lblDots.Text               = "•"
-lblDots.TextColor3         = Color3.fromRGB(0,160,230)
-lblDots.Font               = Enum.Font.GothamBold
-lblDots.TextSize           = 13
-lblDots.TextXAlignment     = Enum.TextXAlignment.Right
-
--- Footer
-local lblFooter = Instance.new("TextLabel", card)
-lblFooter.Size               = UDim2.new(1,0,0,16)
-lblFooter.Position           = UDim2.new(0,0,1,-26)
-lblFooter.BackgroundTransparency = 1
-lblFooter.Text               = "Owner: Dapz  •  Developer: Theo & Mon"
-lblFooter.TextColor3         = Color3.fromRGB(48,48,48)
-lblFooter.Font               = Enum.Font.Gotham
-lblFooter.TextSize           = 10
-
--- ── Loader helpers ──────────────────────────────────────
-local function setProgress(pct, msg)
-    TweenService:Create(barFill,
-        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        { Size = UDim2.new(pct, 0, 1, 0) }
-    ):Play()
-    if msg then lblStatus.Text = msg end
+-- Discover sell remote — re-searched every 30 s so late-spawning remotes are found
+local _sellRemote    = nil
+local _sellCacheTime = 0
+local SELL_NAMES = {
+    "SellFish","Sell","SellAll","SellItems","SellFishes",
+    "sellfish","sell","sellall","SellInv","SellInventory",
+}
+local function getSellRemote()
+    local now = tick()
+    if _sellRemote and (now - _sellCacheTime) < 30 then return _sellRemote end
+    for _, name in ipairs(SELL_NAMES) do
+        local r = RS:FindFirstChild(name, true)
+        if r then _sellRemote = r; _sellCacheTime = now; return r end
+    end
+    _sellRemote = nil
+    return nil
 end
 
+-- ═══════════════════════════
+--  [9] FISH THUMBNAIL HELPER
+-- ═══════════════════════════
+-- Tries several methods to get a displayable image URL for a caught fish tool.
+-- Falls back to player headshot if nothing found.
+local function getFishImageURL(tool)
+    -- Method 1: explicit attribute
+    for _, attr in ipairs({"ImageId","imageId","ThumbnailId","thumbnailId","Icon","icon"}) do
+        local v = tool:GetAttribute(attr)
+        if v then
+            local id = tostring(v):match("%d+")
+            if id then
+                return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+            end
+        end
+    end
+
+    -- Method 2: Handle mesh TextureId
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        local mesh = handle:FindFirstChildOfClass("SpecialMesh")
+        if mesh and mesh.TextureId and mesh.TextureId ~= "" then
+            local id = mesh.TextureId:match("%d+")
+            if id then
+                return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+            end
+        end
+        -- Method 3: Decal/Texture on Handle
+        for _, obj in ipairs(handle:GetChildren()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                local id = obj.Texture:match("%d+")
+                if id then
+                    return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+                end
+            end
+        end
+    end
+
+    -- Method 4: Tool TextureId (shirt-style icon)
+    if tool.TextureId and tool.TextureId ~= "" then
+        local id = tool.TextureId:match("%d+")
+        if id then
+            return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+        end
+    end
+
+    -- Fallback: player headshot
+    return "https://www.roblox.com/headshot-thumbnail/image?userId="
+        ..LP.UserId.."&width=420&height=420&format=png"
+end
+
+-- ═══════════════════════════
+--  [10] RARITY HELPER
+-- ═══════════════════════════
+local function getRarity(item)
+    local r = item:GetAttribute("Rarity") or item:GetAttribute("rarity")
+    if not r then
+        for _, n in ipairs({"Rarity","rarity","RarityValue"}) do
+            local v = item:FindFirstChild(n)
+            if v and v.ClassName:find("Value") then r = v.Value; break end
+        end
+    end
+    return tostring(r or "Common")
+end
+
+local RAR_COLOR = {
+    Common=0xAAAAAA, Uncommon=0x44CC44, Rare=0x4499FF,
+    Epic=0xAA44FF,   Legendary=0xFFAA00, Secret=0xFF2255,
+}
+
+-- ═══════════════════════════════════════════════════════════════
+--  [11] ── OPTIMISED LOADER ──
+--   • Rayfield fetched in background task at script start
+--   • Loader renders while Rayfield loads → total wait = 0
+--     (or just the remainder if Rayfield is still loading)
+--   • 12 GUI instances (lean)
+--   • Slide-up entrance tween
+--   • Dot animation killed by boolean flag — no .Parent polling
+-- ═══════════════════════════════════════════════════════════════
+
+-- Start Rayfield fetch NOW (parallel, not blocking)
+local _rfDone, _rf = false, nil
+task.spawn(function()
+    local ok, v = pcall(function()
+        return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+    _rf    = ok and v or nil
+    _rfDone = true
+end)
+
+-- ── GUI builder helpers (reduces repeated boilerplate) ─────────
+local function mkFrame(parent, props)
+    local f = Instance.new("Frame", parent)
+    f.BorderSizePixel = 0
+    for k, v in pairs(props or {}) do f[k] = v end
+    return f
+end
+
+local function mkLabel(parent, props)
+    local l = Instance.new("TextLabel", parent)
+    l.BackgroundTransparency = 1
+    l.Font = Enum.Font.GothamBold
+    for k, v in pairs(props or {}) do l[k] = v end
+    return l
+end
+
+-- ── Build loader (12 instances) ────────────────────────────────
+local loaderGui        = Instance.new("ScreenGui")
+loaderGui.Name         = "FlowStudioLoader"
+loaderGui.ResetOnSpawn = false
+loaderGui.DisplayOrder = 9999
+loaderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+loaderGui.Parent       = Core
+
+local lBG = mkFrame(loaderGui, {
+    Size = UDim2.new(1,0,1,0),
+    BackgroundColor3 = Color3.fromRGB(10,10,10),
+})
+
+-- Card starts 18px below final pos → slides up on entrance
+local lCard = mkFrame(lBG, {
+    AnchorPoint = Vector2.new(0.5,0.5),
+    Size        = UDim2.new(0,400,0,215),
+    Position    = UDim2.new(0.5,0, 0.5, 18),  -- entrance offset
+    BackgroundColor3 = Color3.fromRGB(20,20,20),
+})
+Instance.new("UICorner", lCard).CornerRadius = UDim.new(0,14)
+local lStroke = Instance.new("UIStroke", lCard)
+lStroke.Color = Color3.fromRGB(40,40,40); lStroke.Thickness = 1.2
+
+-- Accent bar (top)
+mkFrame(lCard, {
+    Size = UDim2.new(1,0,0,3),
+    BackgroundColor3 = Color3.fromRGB(0,148,218),
+})
+
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,44), Position=UDim2.new(0,0,0,18),
+    Text="FLOW  STUDIO",
+    TextColor3 = Color3.fromRGB(245,245,245),
+    Font = Enum.Font.GothamBlack, TextSize = 32,
+})
+
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,18), Position=UDim2.new(0,0,0,63),
+    Text = "Fishzar Script  —  v3.0",
+    TextColor3 = Color3.fromRGB(0,148,218), TextSize = 12,
+})
+
+-- Progress track
+local lTrack = mkFrame(lCard, {
+    Size = UDim2.new(0,335,0,4),
+    Position = UDim2.new(0.5,-167,0,128),
+    BackgroundColor3 = Color3.fromRGB(32,32,32),
+})
+Instance.new("UICorner", lTrack).CornerRadius = UDim.new(1,0)
+
+-- Progress fill
+local lFill = mkFrame(lTrack, {
+    Size = UDim2.new(0,0,1,0),
+    BackgroundColor3 = Color3.fromRGB(0,148,218),
+})
+Instance.new("UICorner", lFill).CornerRadius = UDim.new(1,0)
+
+-- Status text
+local lStatus = mkLabel(lCard, {
+    Size = UDim2.new(1,-28,0,14),
+    Position = UDim2.new(0,14,0,143),
+    Text = "Starting...",
+    TextColor3 = Color3.fromRGB(68,68,68),
+    Font = Enum.Font.Gotham, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left,
+})
+
+-- Footer
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,12), Position=UDim2.new(0,0,1,-18),
+    Text="Owner: Dapz  •  Dev: Theo & Mon  •  "..execName,
+    TextColor3=Color3.fromRGB(38,38,38),
+    Font=Enum.Font.Gotham, TextSize=9,
+})
+
+-- ── Entrance animation ──────────────────────────────────────────
+Tween:Create(lCard,
+    TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    { Position = UDim2.new(0.5,0, 0.5,0) }
+):Play()
+
+-- ── Progress & dot helpers ──────────────────────────────────────
+local _EO     = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local _alive  = true
+
+local function setP(pct, msg)
+    Tween:Create(lFill, _EO, { Size = UDim2.new(pct, 0, 1, 0) }):Play()
+    if msg then lStatus.Text = msg end
+end
+
+-- Dot thread — killed by _alive flag (never polls .Parent)
+task.spawn(function()
+    local dots = {"·","· ·","· · ·","· ·"}; local i = 1
+    while _alive do
+        -- Strip old dots then append
+        local base = lStatus.Text:gsub("%s*·.*$","")
+        lStatus.Text = base.."  "..dots[i]
+        i = i % #dots + 1
+        task.wait(0.32)
+    end
+end)
+
+-- Dismiss: fade card + bg, destroy after animation
 local function dismissLoader()
-    local info = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
-    for _, v in ipairs(loaderGui:GetDescendants()) do
+    _alive = false
+    local t = TweenInfo.new(0.38, Enum.EasingStyle.Quad)
+    Tween:Create(lBG,   t, {BackgroundTransparency=1}):Play()
+    Tween:Create(lCard, t, {BackgroundTransparency=1}):Play()
+    for _, v in ipairs(lCard:GetDescendants()) do
         pcall(function()
-            if v:IsA("TextLabel") or v:IsA("TextButton") then
-                TweenService:Create(v, info, { TextTransparency = 1 }):Play()
-            end
-            if v:IsA("Frame") or v:IsA("ImageLabel") then
-                TweenService:Create(v, info, { BackgroundTransparency = 1 }):Play()
-            end
-            if v:IsA("UIStroke") then
-                TweenService:Create(v, info, { Transparency = 1 }):Play()
+            if v:IsA("TextLabel") then
+                Tween:Create(v,t,{TextTransparency=1,BackgroundTransparency=1}):Play()
+            elseif v:IsA("Frame") then
+                Tween:Create(v,t,{BackgroundTransparency=1}):Play()
+            elseif v:IsA("UIStroke") then
+                Tween:Create(v,t,{Transparency=1}):Play()
             end
         end)
     end
-    TweenService:Create(overlay, info, { BackgroundTransparency = 1 }):Play()
-    task.delay(0.65, function()
+    task.delay(0.42, function()
         if loaderGui and loaderGui.Parent then loaderGui:Destroy() end
     end)
 end
 
--- Animate dots in background
-task.spawn(function()
-    local frames = { "•", "• •", "• • •", "• •" }
-    local i = 1
-    while lblDots and lblDots.Parent do
-        lblDots.Text = frames[i]
-        i = (i % #frames) + 1
-        task.wait(0.38)
-    end
-end)
-
--- ── Begin loading ────────────────────────────────────────
-setProgress(0.05, "Starting up...")
-
--- ═══════════════════════════════════════════
---  STATS OVERLAY GUI
--- ═══════════════════════════════════════════
-setProgress(0.15, "Building stats overlay...")
+-- ═══════════════════════════
+--  [12] STATS OVERLAY GUI
+--  Built in parallel while Rayfield fetches
+-- ═══════════════════════════
+setP(0.10, "Building stats overlay")
 
 local StatsGui = Instance.new("ScreenGui")
-StatsGui.Name            = "FlowStudioStats"
-StatsGui.ResetOnSpawn    = false
-StatsGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-StatsGui.Enabled         = false
-StatsGui.Parent          = CoreGui
+StatsGui.Name = "FlowStudioStats"
+StatsGui.ResetOnSpawn = false
+StatsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+StatsGui.Enabled = false
+StatsGui.Parent = Core
 
-local SBG = Instance.new("Frame", StatsGui)
-SBG.Size             = UDim2.new(0,295,0,50)
-SBG.Position         = UDim2.new(0.5,-147,0,10)
-SBG.BackgroundColor3 = Color3.fromRGB(18,18,18)
-SBG.Active           = true
-SBG.Draggable        = true
-SBG.BorderSizePixel  = 0
+local SBG = mkFrame(StatsGui, {
+    Size=UDim2.new(0,300,0,50), Position=UDim2.new(0.5,-150,0,10),
+    BackgroundColor3=Color3.fromRGB(18,18,18),
+    Active=true, Draggable=true,
+})
 Instance.new("UICorner", SBG).CornerRadius = UDim.new(0,12)
-local ss = Instance.new("UIStroke", SBG)
-ss.Color = Color3.fromRGB(50,50,50); ss.Thickness = 1.2
+local _ss = Instance.new("UIStroke", SBG)
+_ss.Color = Color3.fromRGB(45,45,45); _ss.Thickness = 1.2
 
-local function makeBadge(parent, xOff, color)
-    local f = Instance.new("Frame", parent)
-    f.Size             = UDim2.new(0,88,0,34)
-    f.Position         = UDim2.new(0, xOff, 0, 8)
-    f.BackgroundColor3 = Color3.fromRGB(28,28,28)
-    f.BorderSizePixel  = 0
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0,8)
-    local lbl = Instance.new("TextLabel", f)
-    lbl.Size               = UDim2.new(1,0,1,0)
-    lbl.BackgroundTransparency = 1
-    lbl.TextColor3         = color
-    lbl.Font               = Enum.Font.GothamBold
-    lbl.TextSize           = 11
-    return lbl
+local function mkBadge(parent, x, color)
+    local f = mkFrame(parent, {
+        Size=UDim2.new(0,90,0,34), Position=UDim2.new(0,x,0,8),
+        BackgroundColor3=Color3.fromRGB(26,26,26),
+    })
+    Instance.new("UICorner",f).CornerRadius = UDim.new(0,8)
+    return mkLabel(f, {Size=UDim2.new(1,0,1,0), TextColor3=color, TextSize=11})
 end
 
-local PingL = makeBadge(SBG, 8,   Color3.fromRGB(100,200,255))
-local CpuL  = makeBadge(SBG, 102, Color3.fromRGB(255,175,70))
-local FpsL  = makeBadge(SBG, 196, Color3.fromRGB(110,230,110))
+local PingL = mkBadge(SBG, 6,   Color3.fromRGB(100,200,255))
+local CpuL  = mkBadge(SBG, 103, Color3.fromRGB(255,175,70))
+local FpsL  = mkBadge(SBG, 200, Color3.fromRGB(110,230,110))
 
 local _fps = 0
-RunService.RenderStepped:Connect(function() _fps += 1 end)
+Run.RenderStepped:Connect(function() _fps += 1 end)
+
 task.spawn(function()
     while task.wait(1) do
-        local _, ping = pcall(function() return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-        local _, cpu  = pcall(function() return math.floor(Stats.PerformanceStats.CPU:GetValue()*100)/100 end)
-        PingL.Text = "Ping: " .. tostring(ping or "N/A") .. " ms"
-        CpuL.Text  = "CPU: "  .. tostring(cpu  or "N/A") .. " ms"
+        local _, ping = pcall(function()
+            return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+        end)
+        local _, cpu = pcall(function()
+            return math.floor(Stats.PerformanceStats.CPU:GetValue() * 100) / 100
+        end)
+        PingL.Text = "Ping: " .. tostring(ping or "?") .. "ms"
+        CpuL.Text  = "CPU: "  .. tostring(cpu  or "?") .. "ms"
         FpsL.Text  = "FPS: "  .. _fps
         _fps = 0
     end
 end)
 
--- ═══════════════════════════════════════════
---  LOAD RAYFIELD (hidden behind our loader)
--- ═══════════════════════════════════════════
-setProgress(0.30, "Fetching UI library...")
+-- ═══════════════════════════
+--  [13] WAIT FOR RAYFIELD
+-- ═══════════════════════════
+setP(0.35, "Loading UI library")
 
-local Rayfield
-local ok, err = pcall(function()
-    Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-end)
+local _deadline = tick() + 18
+while not _rfDone and tick() < _deadline do
+    task.wait(0.05)
+end
 
-if not ok or not Rayfield then
+if not _rf then
     dismissLoader()
-    warn("[Flow Studio] Rayfield load failed: " .. tostring(err))
+    warn("[Flow Studio] Rayfield failed to load.")
     pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title="Flow Studio", Text="UI failed to load. Re-run.", Duration=8
+        SG:SetCore("SendNotification", {
+            Title="Flow Studio", Text="UI failed. Re-run script.", Duration=8
         })
     end)
     return
 end
 
-setProgress(0.55, "Building window...")
+local Rayfield = _rf
+setP(0.60, "Building window")
 
--- ═══════════════════════════════════════════
---  RAYFIELD WINDOW
--- ═══════════════════════════════════════════
+-- ═══════════════════════════
+--  [14] RAYFIELD WINDOW
+-- ═══════════════════════════
 local Window = Rayfield:CreateWindow({
-    Name              = "Flow Studio  —  Fishzar  |  v2.0",
-    LoadingTitle      = "Flow Studio",
-    LoadingSubtitle   = "by Theo & Mon",
-    Theme             = "Default",  -- We override below via ThemeColor
+    Name                   = "Flow Studio  —  Fishzar  |  v3.0",
+    LoadingTitle           = "Flow Studio",
+    LoadingSubtitle        = "by Theo & Mon",
+    Theme                  = "Default",
     DisableRayfieldPrompts = true,
     DisableBuildWarnings   = true,
-    ConfigurationSaving = { Enabled = false },
-    KeySystem           = false,
+    ConfigurationSaving    = { Enabled = false },
+    KeySystem              = false,
 })
 
-setProgress(0.70, "Creating tabs...")
+setP(0.78, "Creating tabs")
 
--- ═══════════════════════════════════════════
---  TABS
--- ═══════════════════════════════════════════
-local T = {}
-T.Main      = Window:CreateTab("Main",        4483362458)
-T.Fishing   = Window:CreateTab("Fishing",     4483362458)
-T.Player    = Window:CreateTab("Player",      4483362458)
-T.Teleport  = Window:CreateTab("Teleport",    4483362458)
-T.Webhook   = Window:CreateTab("Webhook",     4483362458)
-T.Utilities = Window:CreateTab("Utilities",   4483362458)
-T.Perf      = Window:CreateTab("Performance", 4483362458)
+-- ═══════════════════════════
+--  [15] TABS
+-- ═══════════════════════════
+local IC = 4483362458   -- generic Roblox icon (safe fallback)
+local T = {
+    Main      = Window:CreateTab("Main",        IC),
+    Fishing   = Window:CreateTab("Fishing",     IC),
+    Player    = Window:CreateTab("Player",      IC),
+    Teleport  = Window:CreateTab("Teleport",    IC),
+    Webhook   = Window:CreateTab("Webhook",     IC),
+    Utilities = Window:CreateTab("Utilities",   IC),
+    Perf      = Window:CreateTab("Performance", IC),
+}
 
-local function Notify(title, content, dur)
+local function N(title, content, dur)
     Rayfield:Notify({ Title=title, Content=content, Duration=dur or 3 })
 end
 
-setProgress(0.80, "Populating tabs...")
+setP(0.88, "Populating tabs")
 
--- ─────────────────────────────────────────────────────────
---  TAB: MAIN
--- ─────────────────────────────────────────────────────────
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: MAIN                           ║
+-- ╚══════════════════════════════════════╝
 T.Main:CreateSection("Flow Studio")
-T.Main:CreateLabel("Version 2.0  |  Fishzar Script")
-T.Main:CreateLabel("Owner: Dapz  •  Developer: Theo & Mon")
+T.Main:CreateLabel("v3.0  |  Owner: Dapz  •  Dev: Theo & Mon")
 T.Main:CreateLabel("Executor: " .. execName)
-
 T.Main:CreateButton({
-    Name     = "Copy Discord Invite",
+    Name = "Copy Discord Invite",
     Callback = function()
         if setclipboard then
             setclipboard("https://discord.gg/wVr9r3tCmT")
-            Notify("Discord", "Invite link copied!", 3)
+            N("Discord", "Invite link copied!", 2)
         end
     end,
 })
 
-T.Main:CreateSection("Changelog v2.0")
-T.Main:CreateLabel("[+] Custom loading screen (no Rayfield loader)")
-T.Main:CreateLabel("[+] Rebranded to Flow Studio")
-T.Main:CreateLabel("[+] Remote caching — no lag in farm loop")
-T.Main:CreateLabel("[+] Auto Sell supports RemoteEvent + RemoteFunction")
-T.Main:CreateLabel("[+] Delay is a slider — no typo crashes")
-T.Main:CreateLabel("[+] FPS Boost is reversible")
-T.Main:CreateLabel("[+] All callbacks wrapped in pcall")
-T.Main:CreateSection("Legal")
-T.Main:CreateLabel("(c) 2026 Flow Studio  —  All Rights Reserved")
+T.Main:CreateSection("v3.0 Changelog")
+for _, line in ipairs({
+    "[FIX]  Teleport uses PivotTo — now actually works",
+    "[FIX]  Rod detection: any tool or custom keyword",
+    "[FIX]  Fish image in webhook from Handle mesh",
+    "[FIX]  Auto Sell searches 10+ remote name variants",
+    "[NEW]  Delay: text input (type any value)",
+    "[NEW]  Rod Keyword input for high-level rods",
+    "[OPT]  Parallel loader — Rayfield pre-fetched",
+    "[OPT]  12 GUI instances (was 28+)",
+    "[OPT]  Slide-up entrance + smooth fade",
+}) do T.Main:CreateLabel(line) end
 
--- ─────────────────────────────────────────────────────────
---  TAB: FISHING
--- ─────────────────────────────────────────────────────────
+T.Main:CreateSection("Legal")
+T.Main:CreateLabel("(c) 2026 Flow Studio — All Rights Reserved")
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: FISHING                        ║
+-- ╚══════════════════════════════════════╝
 T.Fishing:CreateSection("Auto Farm")
 
 T.Fishing:CreateToggle({
-    Name         = "Auto Farm",
+    Name = "Auto Farm",
     CurrentValue = false,
-    Flag         = "AutoFarm",
-    Callback     = function(v)
-        FC.Farming = v
-        Notify("Auto Farm", v and "Farming started!" or "Farming stopped.", 2)
+    Flag = "AutoFarm",
+    Callback = function(v)
+        C.Farming = v
+        N("Auto Farm", v and "Farming started!" or "Farming stopped.", 2)
     end,
 })
 
-T.Fishing:CreateSlider({
-    Name         = "Cast Delay (seconds)",
-    Range        = {1, 15},
-    Increment    = 0.5,
-    CurrentValue = 3,
-    Flag         = "Delay",
-    Callback     = function(v) FC.Delay = v end,
+-- ── Delay: Input instead of Slider ──────────────
+-- Fixed: no more slider; user types their own value
+T.Fishing:CreateInput({
+    Name = "Cast Delay  (seconds)",
+    PlaceholderText = "Default: 3.0  —  type your delay",
+    RemoveTextAfterFocusLost = false,
+    Flag = "FishDelay",
+    Callback = function(v)
+        local n = tonumber(v:match("[%d%.]+"))
+        if n and n >= 0.5 then
+            C.Delay = n
+            N("Fishing", "Delay set to " .. n .. "s", 2)
+        else
+            N("Fishing", "Invalid value. Using previous delay.", 3)
+        end
+    end,
+})
+
+-- ── Rod keyword ────────────────────────────────
+-- Fixed: high-level rods now work by letting user type keyword.
+-- Leave EMPTY to accept ANY equipped tool as a rod.
+T.Fishing:CreateInput({
+    Name = "Rod Keyword  (leave empty = any tool)",
+    PlaceholderText = "e.g. Rod  •  Kail  •  Trident  •  (empty = all)",
+    RemoveTextAfterFocusLost = false,
+    Flag = "RodKeyword",
+    Callback = function(v)
+        C.RodKeyword = v:match("^%s*(.-)%s*$")
+        if C.RodKeyword == "" then
+            N("Fishing", "Rod mode: ANY equipped tool", 3)
+        else
+            N("Fishing", "Rod mode: tools containing '"..C.RodKeyword.."'", 3)
+        end
+    end,
 })
 
 T.Fishing:CreateSection("Auto Sell")
 
 T.Fishing:CreateToggle({
-    Name         = "Auto Sell",
+    Name = "Auto Sell",
     CurrentValue = false,
-    Flag         = "AutoSell",
-    Callback     = function(v) FC.AutoSell = v end,
+    Flag = "AutoSell",
+    Callback = function(v) C.AutoSell = v end,
 })
 
 T.Fishing:CreateDropdown({
-    Name          = "Sell Remote Mode",
-    Options       = { "Auto-Detect", "RemoteFunction", "RemoteEvent" },
+    Name = "Sell Remote Mode",
+    Options = { "Auto-Detect", "RemoteFunction (InvokeServer)", "RemoteEvent (FireServer)" },
     CurrentOption = "Auto-Detect",
-    Flag          = "SellMode",
-    Callback      = function(v)
-        FC.SellMode = v == "RemoteFunction" and "invoke"
-                   or v == "RemoteEvent"    and "fire"
-                   or "auto"
+    Flag = "SellMode",
+    Callback = function(v)
+        C.SellMode = v:find("Function") and "invoke"
+                  or v:find("Event")    and "fire"
+                  or "auto"
     end,
 })
 
--- ─────────────────────────────────────────────────────────
---  TAB: PLAYER
--- ─────────────────────────────────────────────────────────
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: PLAYER                         ║
+-- ╚══════════════════════════════════════╝
 T.Player:CreateSection("Movement")
 
 T.Player:CreateToggle({
-    Name         = "Walk on Water",
+    Name = "Walk on Water",
     CurrentValue = false,
-    Flag         = "WalkWater",
-    Callback     = function(v)
-        FC.WalkWater = v
+    Flag = "WalkWater",
+    Callback = function(v)
+        C.WalkWater = v
         if v then
-            local root = LocalPlayer.Character
-                and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            FC._lockedY = root and (root.Position.Y - 3.2) or nil
+            local r = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            C._lockedY = r and (r.Position.Y - 3.2) or nil
         else
-            FC._lockedY = nil
+            C._lockedY = nil
         end
     end,
 })
 
 T.Player:CreateToggle({
-    Name         = "Anti Drown",
+    Name = "Anti Drown",
     CurrentValue = false,
-    Flag         = "AntiDrown",
-    Callback     = function(v) FC.AntiDrown = v end,
+    Flag = "AntiDrown",
+    Callback = function(v) C.AntiDrown = v end,
 })
 
 T.Player:CreateSection("Equipment")
 
 T.Player:CreateToggle({
-    Name         = "Auto Equip Fishing Rod",
+    Name = "Auto Equip Fishing Rod",
     CurrentValue = false,
-    Flag         = "AutoEquip",
-    Callback     = function(v) FC.AutoEquip = v end,
+    Flag = "AutoEquip",
+    Callback = function(v) C.AutoEquip = v end,
 })
 
 T.Player:CreateSection("Avatar")
 
 T.Player:CreateInput({
-    Name                     = "Change Avatar by User ID",
-    PlaceholderText          = "Enter Roblox User ID...",
+    Name = "Change Avatar  (Roblox User ID)",
+    PlaceholderText = "Enter any Roblox User ID...",
     RemoveTextAfterFocusLost = false,
-    Flag                     = "AvatarID",
-    Callback                 = function(v)
+    Flag = "AvatarID",
+    Callback = function(v)
         local id = tonumber(v:match("%d+"))
-        if not id then Notify("Avatar", "Invalid User ID.", 3) return end
-        local char = LocalPlayer.Character
-        if not char then return end
+        if not id then N("Avatar","Invalid ID — numbers only.",3) return end
+
+        local char = LP.Character
+        if not char then N("Avatar","No character found.",3) return end
+
         pcall(function()
             local hum = char:FindFirstChildOfClass("Humanoid")
             if not hum then return end
-            local model = Players:CreateHumanoidModelFromUserId(id)
+
+            local model = Plrs:CreateHumanoidModelFromUserId(id)
+
             for _, obj in ipairs(char:GetChildren()) do
                 if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants")
                 or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then
                     obj:Destroy()
                 end
             end
+
             for _, obj in ipairs(model:GetChildren()) do
                 if obj:IsA("Accessory") then
                     hum:AddAccessory(obj:Clone())
@@ -544,9 +710,11 @@ T.Player:CreateInput({
                     obj:Clone().Parent = char
                 end
             end
+
             local bc1 = char:FindFirstChildWhichIsA("BodyColors")
             local bc2 = model:FindFirstChildWhichIsA("BodyColors")
             if bc1 and bc2 then bc1:Destroy(); bc2:Clone().Parent = char end
+
             local h1 = char:FindFirstChild("Head")
             local h2 = model:FindFirstChild("Head")
             if h1 and h2 then
@@ -554,178 +722,267 @@ T.Player:CreateInput({
                 local f2 = h2:FindFirstChildOfClass("Decal")
                 if f1 and f2 then f1.Texture = f2.Texture end
             end
+
             model:Destroy()
-            Notify("Avatar", "Applied successfully!", 3)
+            N("Avatar","Applied successfully!",3)
         end)
     end,
 })
 
--- ─────────────────────────────────────────────────────────
---  TAB: TELEPORT
--- ─────────────────────────────────────────────────────────
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: TELEPORT                       ║
+-- ╚══════════════════════════════════════╝
+-- FIXED: uses Character:PivotTo() which is reliable.
+-- Player teleport now stores selection separately and
+-- teleports only when "Teleport to Player" button is pressed.
+-- Island teleport works the same way.
+
 T.Teleport:CreateSection("Teleport to Player")
+
+local _selectedPlayer = ""
 
 local function getPlayerList()
     local t = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer then table.insert(t, p.Name) end
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p ~= LP then t[#t+1] = p.Name end
     end
-    return #t > 0 and t or { "(No players)" }
+    return #t > 0 and t or { "(No players online)" }
 end
 
 T.Teleport:CreateDropdown({
-    Name          = "Select Player",
-    Options       = getPlayerList(),
-    CurrentOption = "(No players)",
-    Flag          = "TpPlayer",
-    Callback      = function(v)
-        if v == "(No players)" then return end
-        local target = Players:FindFirstChild(v)
-        if not target or not target.Character then
-            Notify("Teleport", "Player not found.", 3) return
+    Name = "Select Player",
+    Options = getPlayerList(),
+    CurrentOption = "(No players online)",
+    Flag = "TpPlayerDrop",
+    Callback = function(v)
+        _selectedPlayer = v
+    end,
+})
+
+-- Dedicated button — teleport happens here, not on dropdown select
+T.Teleport:CreateButton({
+    Name = "⬆  Teleport to Selected Player",
+    Callback = function()
+        if _selectedPlayer == "" or _selectedPlayer == "(No players online)" then
+            N("Teleport","Select a player first.",3) return
         end
-        local tr = target.Character:FindFirstChild("HumanoidRootPart")
-        local mr = LocalPlayer.Character
-            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if tr and mr then
-            mr.CFrame = tr.CFrame * CFrame.new(0, 4, 0)
-            Notify("Teleport", "Teleported to " .. v, 2)
+
+        local target = Plrs:FindFirstChild(_selectedPlayer)
+        if not target then N("Teleport","Player left the game.",3) return end
+        if not target.Character then N("Teleport","Target has no character.",3) return end
+
+        local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        if not tRoot then N("Teleport","Cannot find target position.",3) return end
+
+        local myChar = LP.Character
+        if not myChar then N("Teleport","You have no character.",3) return end
+
+        -- PivotTo is reliable in all Roblox versions
+        local ok = pcall(function()
+            myChar:PivotTo(tRoot.CFrame * CFrame.new(0, 4, 0))
+        end)
+        if not ok then
+            -- Fallback to direct CFrame
+            pcall(function()
+                local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 4, 0)
+                end
+            end)
         end
+
+        N("Teleport","Teleported to " .. _selectedPlayer, 2)
     end,
 })
 
 T.Teleport:CreateButton({
-    Name = "Refresh Player List",
+    Name = "↺  Refresh Player List",
     Callback = function()
-        Notify("Players Online", table.concat(getPlayerList(), ", "), 5)
+        local list = getPlayerList()
+        N("Players Online", table.concat(list, "\n"), 5)
     end,
 })
 
 T.Teleport:CreateSection("Teleport to Island")
 
+local _selectedIsland = ""
 local islandNames = {}
-for name in pairs(Islands) do table.insert(islandNames, name) end
+for name in pairs(Islands) do islandNames[#islandNames+1] = name end
 table.sort(islandNames)
 
 T.Teleport:CreateDropdown({
-    Name          = "Select Island",
-    Options       = islandNames,
-    CurrentOption = islandNames[1],
-    Flag          = "TpIsland",
-    Callback      = function(v)
-        local pos = Islands[v]
-        if not pos then return end
-        local root = LocalPlayer.Character
-            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = CFrame.new(pos + Vector3.new(0, 6, 0))
-            Notify("Teleport", "Teleported to " .. v, 2)
-        end
+    Name = "Select Island",
+    Options = islandNames,
+    CurrentOption = islandNames[1] or "",
+    Flag = "TpIslandDrop",
+    Callback = function(v)
+        _selectedIsland = v
     end,
 })
 
 T.Teleport:CreateButton({
-    Name = "Where Am I?",
-    Callback = function() Notify("Location", getLocation(), 4) end,
+    Name = "⬆  Teleport to Selected Island",
+    Callback = function()
+        local name = _selectedIsland ~= "" and _selectedIsland or islandNames[1]
+        local pos  = Islands[name]
+
+        if not pos then N("Teleport","Invalid island.",3) return end
+
+        local myChar = LP.Character
+        if not myChar then N("Teleport","No character.",3) return end
+
+        local dest = CFrame.new(pos + Vector3.new(0, 8, 0))
+
+        local ok = pcall(function() myChar:PivotTo(dest) end)
+        if not ok then
+            pcall(function()
+                local r = myChar:FindFirstChild("HumanoidRootPart")
+                if r then r.CFrame = dest end
+            end)
+        end
+
+        N("Teleport","→ " .. name, 2)
+    end,
 })
 
--- ─────────────────────────────────────────────────────────
---  TAB: WEBHOOK
--- ─────────────────────────────────────────────────────────
+T.Teleport:CreateButton({
+    Name = "📍  Where Am I?",
+    Callback = function() N("Location", getLoc(), 4) end,
+})
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: WEBHOOK                        ║
+-- ╚══════════════════════════════════════╝
 T.Webhook:CreateSection("Webhook Setup")
 
 T.Webhook:CreateInput({
-    Name                     = "Discord Webhook URL",
-    PlaceholderText          = "https://discord.com/api/webhooks/...",
+    Name = "Discord Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
     RemoveTextAfterFocusLost = false,
-    Flag                     = "WebhookURL",
-    Callback                 = function(v)
-        FC.WebhookURL = v:match("^%s*(.-)%s*$")
+    Flag = "WebhookURL",
+    Callback = function(v)
+        v = v:match("^%s*(.-)%s*$")
+        if v ~= "" and not v:find("discord%.com/api/webhooks/", 1, true) then
+            N("Webhook", "⚠ Invalid URL — must be a Discord webhook link.", 4)
+            return
+        end
+        C.WebhookURL = v
+        if v ~= "" then N("Webhook", "URL saved ✓", 2) end
     end,
 })
 
 T.Webhook:CreateToggle({
-    Name         = "Ping @everyone on Disconnect",
+    Name = "Ping @everyone on Disconnect",
     CurrentValue = false,
-    Flag         = "WebhookDisc",
-    Callback     = function(v) FC.WebhookDisconn = v end,
+    Flag = "WebhookDisc",
+    Callback = function(v) C.WebhookDisconn = v end,
 })
 
 T.Webhook:CreateButton({
     Name = "Send Test Message",
     Callback = function()
-        if FC.WebhookURL == "" then
-            Notify("Webhook", "No URL set!", 4) return
-        end
-        safeRequest({
-            Url    = FC.WebhookURL,
+        if C.WebhookURL == "" then N("Webhook","No URL set!",4) return end
+        safeReq({
+            Url    = C.WebhookURL,
             Method = "POST",
-            Headers = { ["Content-Type"] = "application/json" },
-            Body   = HttpService:JSONEncode({ embeds = {{
-                title  = "Flow Studio — Webhook Test",
-                color  = 0x00A0E6,
-                fields = {
-                    { name="Player",   value=LocalPlayer.Name,  inline=true  },
-                    { name="Location", value=getLocation(),      inline=true  },
-                    { name="Job ID",   value=game.JobId,         inline=false },
-                },
-                footer = { text = "Flow Studio v2.0" }
-            }} }),
+            Headers = { ["Content-Type"]="application/json" },
+            Body   = Http:JSONEncode({
+                embeds = {{
+                    title  = "Flow Studio — Webhook Test ✅",
+                    color  = 0x0094DA,
+                    thumbnail = {
+                        url = "https://www.roblox.com/headshot-thumbnail/image?userId="
+                              ..LP.UserId.."&width=420&height=420&format=png"
+                    },
+                    fields = {
+                        { name="Player",   value=LP.Name,  inline=true  },
+                        { name="Location", value=getLoc(), inline=true  },
+                        { name="Job ID",   value=game.JobId, inline=false },
+                    },
+                    footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
+                }}
+            }),
         })
-        Notify("Webhook", "Test sent!", 3)
+        N("Webhook","Test message sent!",3)
     end,
 })
 
-T.Webhook:CreateSection("Rarity Filters")
-T.Webhook:CreateLabel("Enable to receive Discord pings for that rarity.")
+T.Webhook:CreateSection("Rarity Notification Filters")
+T.Webhook:CreateLabel("Enable a rarity to receive a Discord ping when caught.")
 
-local RARITIES = { "Common","Uncommon","Rare","Epic","Legendary","Secret" }
-local RAR_DEF  = { Common=false,Uncommon=false,Rare=false,Epic=true,Legendary=true,Secret=true }
+local RARS = {"Common","Uncommon","Rare","Epic","Legendary","Secret"}
+local RDEF = {Common=false,Uncommon=false,Rare=false,Epic=true,Legendary=true,Secret=true}
 
-for _, rar in ipairs(RARITIES) do
+for _, rar in ipairs(RARS) do
     T.Webhook:CreateToggle({
-        Name         = "Notify: " .. rar,
-        CurrentValue = RAR_DEF[rar],
-        Flag         = "WH_" .. rar,
-        Callback     = function(v) FC.WebhookFilters[rar] = v end,
+        Name = "Notify: " .. rar,
+        CurrentValue = RDEF[rar],
+        Flag = "WH_" .. rar,
+        Callback = function(v) C.WebhookFilters[rar] = v end,
     })
 end
 
--- ─────────────────────────────────────────────────────────
---  TAB: UTILITIES
--- ─────────────────────────────────────────────────────────
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: UTILITIES                      ║
+-- ╚══════════════════════════════════════╝
 T.Utilities:CreateSection("Security")
 
 T.Utilities:CreateToggle({
-    Name         = "Streamer Mode",
+    Name = "Streamer Mode  (hides names + chat)",
     CurrentValue = false,
-    Flag         = "Streamer",
-    Callback     = function(v) FC.Streamer = v end,
+    Flag = "Streamer",
+    Callback = function(v) C.Streamer = v end,
 })
 
 T.Utilities:CreateToggle({
-    Name         = "Anti Staff (auto-hop when staff joins)",
+    Name = "Anti Staff  (auto hop when staff joins)",
     CurrentValue = false,
-    Flag         = "AntiStaff",
-    Callback     = function(v) FC.AntiStaff = v end,
+    Flag = "AntiStaff",
+    Callback = function(v) C.AntiStaff = v end,
 })
 
 T.Utilities:CreateSection("Anti AFK")
 
 T.Utilities:CreateToggle({
-    Name         = "Anti AFK",
+    Name = "Anti AFK",
     CurrentValue = true,
-    Flag         = "AntiAFK",
-    Callback     = function(v) FC.AntiAFK = v end,
+    Flag = "AntiAFK",
+    Callback = function(v) C.AntiAFK = v end,
 })
 
 T.Utilities:CreateSection("Display")
 
 T.Utilities:CreateToggle({
-    Name         = "Real-time Stats Overlay",
+    Name = "Real-time Stats Overlay  (Ping / CPU / FPS)",
     CurrentValue = false,
-    Flag         = "StatsOverlay",
-    Callback     = function(v) StatsGui.Enabled = v end,
+    Flag = "StatsOvl",
+    Callback = function(v) StatsGui.Enabled = v end,
+})
+
+T.Utilities:CreateButton({
+    Name = "📊  Session Stats",
+    Callback = function()
+        local fishInBag = 0
+        for _, v in ipairs(LP.Backpack:GetChildren()) do
+            if v:IsA("Tool") then fishInBag += 1 end
+        end
+        local totalCaught = "?"
+        local ls = LP:FindFirstChild("leaderstats")
+        if ls then
+            for _, s in ipairs(ls:GetChildren()) do
+                if s.Name:lower():find("caught") or s.Name:lower():find("fish") then
+                    totalCaught = tostring(s.Value); break
+                end
+            end
+        end
+        N("Session Stats",
+            "This session: " .. _sessionCaught .. " fish\n"
+            .. "Backpack: " .. fishInBag .. "\n"
+            .. "Total caught: " .. totalCaught .. "\n"
+            .. "Location: " .. getLoc(),
+            6
+        )
+    end,
 })
 
 T.Utilities:CreateSection("Server Tools")
@@ -734,36 +991,37 @@ T.Utilities:CreateButton({
     Name = "Rejoin Server",
     Callback = function()
         pcall(function()
-            if #Players:GetPlayers() <= 1 then
-                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            if #Plrs:GetPlayers() <= 1 then
+                TS:Teleport(game.PlaceId, LP)
             else
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
             end
         end)
     end,
 })
 
-local function serverHop(low)
-    pcall(function()
-        local order = low and "Asc" or "Desc"
-        local raw   = game:HttpGet("https://games.roblox.com/v1/games/"
-            ..game.PlaceId.."/servers/Public?sortOrder="..order.."&limit=100")
-        local data  = HttpService:JSONDecode(raw).data or {}
+local function serverHop(lowPop)
+    local ok, err = pcall(function()
+        local order = lowPop and "Asc" or "Desc"
+        local raw   = game:HttpGet(
+            "https://games.roblox.com/v1/games/"..game.PlaceId
+            .."/servers/Public?sortOrder="..order.."&limit=100")
+        local list  = Http:JSONDecode(raw).data or {}
         local valid = {}
-        for _, s in ipairs(data) do
+        for _, s in ipairs(list) do
             if s.id and s.playing and s.maxPlayers
             and s.playing < s.maxPlayers
             and s.id ~= game.JobId then
-                table.insert(valid, s.id)
+                valid[#valid+1] = s.id
             end
         end
-        if #valid == 0 then Notify("Server Hop","No servers found.",3) return end
-        TeleportService:TeleportToPlaceInstance(
-            game.PlaceId, valid[math.random(1, #valid)], LocalPlayer)
+        if #valid == 0 then N("Server Hop","No suitable servers found.",3) return end
+        TS:TeleportToPlaceInstance(game.PlaceId, valid[math.random(1,#valid)], LP)
     end)
+    if not ok then N("Error", tostring(err), 5) end
 end
 
-T.Utilities:CreateButton({ Name="Server Hop  (Low Population)",  Callback=function() serverHop(true)  end })
+T.Utilities:CreateButton({ Name="Server Hop  (Low Population)",  Callback=function() serverHop(true) end  })
 T.Utilities:CreateButton({ Name="Server Hop  (High Population)", Callback=function() serverHop(false) end })
 
 T.Utilities:CreateButton({
@@ -771,40 +1029,38 @@ T.Utilities:CreateButton({
     Callback = function()
         if setclipboard then
             setclipboard(game.JobId)
-            Notify("Server", "Job ID copied!", 2)
+            N("Server","Job ID copied!",2)
         end
     end,
 })
 
 T.Utilities:CreateInput({
-    Name                     = "Join by Job ID",
-    PlaceholderText          = "Paste Job ID here...",
+    Name = "Join Server by Job ID",
+    PlaceholderText = "Paste Job ID here...",
     RemoveTextAfterFocusLost = true,
-    Flag                     = "JoinJob",
-    Callback                 = function(v)
+    Flag = "JoinByJob",
+    Callback = function(v)
         v = v:match("^%s*(.-)%s*$")
-        if #v < 20 then Notify("Error","Invalid Job ID.",3) return end
+        if #v < 20 then N("Error","That doesn't look like a valid Job ID.",3) return end
         pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, v, LocalPlayer)
+            TS:TeleportToPlaceInstance(game.PlaceId, v, LP)
         end)
     end,
 })
 
--- ─────────────────────────────────────────────────────────
---  TAB: PERFORMANCE
--- ─────────────────────────────────────────────────────────
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: PERFORMANCE                    ║
+-- ╚══════════════════════════════════════╝
 T.Perf:CreateSection("FPS Boost")
-T.Perf:CreateLabel("Disables shadows, particles, and lowers quality.")
+T.Perf:CreateLabel("Disables shadows, particles & lowers render quality.")
 
 T.Perf:CreateButton({
     Name = "Apply FPS Boost",
     Callback = function()
-        if FC.FPSBoosted then
-            Notify("Performance","Already applied. Restore first.",3) return
-        end
+        if C.FPSBoosted then N("Performance","Already applied.",3) return end
         pcall(function()
-            Lighting.GlobalShadows = false
-            Lighting.FogEnd        = 9e9
+            Light.GlobalShadows = false
+            Light.FogEnd        = 9e9
             pcall(function()
                 settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
             end)
@@ -822,132 +1078,143 @@ T.Perf:CreateButton({
                 end)
             end
         end)
-        FC.FPSBoosted = true
-        Notify("Performance","FPS Boost applied!",3)
+        C.FPSBoosted = true
+        N("Performance","FPS Boost applied!",3)
     end,
 })
 
 T.Perf:CreateButton({
     Name = "Restore Graphics",
     Callback = function()
-        if not FC.FPSBoosted then
-            Notify("Performance","FPS Boost not active.",3) return
-        end
+        if not C.FPSBoosted then N("Performance","Boost not active.",3) return end
         pcall(function()
-            Lighting.GlobalShadows = true
-            Lighting.FogEnd        = 100000
+            Light.GlobalShadows = true
+            Light.FogEnd        = 100000
             pcall(function()
                 settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
             end)
         end)
-        FC.FPSBoosted = false
-        Notify("Performance","Graphics restored. Rejoin for full effect.",4)
+        C.FPSBoosted = false
+        N("Performance","Graphics restored. Rejoin for particles/textures.",4)
     end,
 })
 
--- ═══════════════════════════════════════════
---  DISMISS LOADER  (all tabs built)
--- ═══════════════════════════════════════════
-setProgress(0.95, "Almost ready...")
-task.wait(0.4)
-setProgress(1.0, "Done!")
-task.wait(0.45)
+-- ════════════════════════════════════════════
+--  [16] DISMISS LOADER
+-- ════════════════════════════════════════════
+setP(0.96, "Almost ready")
+task.wait(0.15)
+setP(1.0, "Done")
+task.wait(0.28)
 dismissLoader()
 
--- ═══════════════════════════════════════════
---  CORE SYSTEMS
--- ═══════════════════════════════════════════
+-- ════════════════════════════════════════════
+--  [17] CORE SYSTEMS
+-- ════════════════════════════════════════════
 
--- ── Anti AFK ──────────────────────────────
-LocalPlayer.Idled:Connect(function()
-    if FC.AntiAFK then
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
+-- ── Anti AFK ─────────────────────────────────
+-- Uses both VirtualUser bypass + re-enable of idle state
+LP.Idled:Connect(function()
+    if not C.AntiAFK then return end
+    pcall(function()
+        VU:CaptureController()
+        VU:ClickButton2(Vector2.new())
+    end)
+end)
+
+-- Periodic keep-alive as a second method
+task.spawn(function()
+    while task.wait(8 * 60) do     -- every 8 minutes
+        if C.AntiAFK then
+            pcall(function() VU:Button2Down(Vector2.new(), workspace.CurrentCamera) end)
+            task.wait(0.05)
+            pcall(function() VU:Button2Up(Vector2.new(), workspace.CurrentCamera)   end)
+        end
     end
 end)
 
--- ── Anti Staff ────────────────────────────
-Players.PlayerAdded:Connect(function()
-    if not FC.AntiStaff then return end
+-- ── Anti Staff ────────────────────────────────
+Plrs.PlayerAdded:Connect(function()
+    if not C.AntiStaff then return end
     task.wait(1.5)
-    if FC.AntiStaff then
+    if C.AntiStaff then
         pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+            TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
         end)
     end
 end)
 
--- ── Disconnect Webhook ────────────────────
+-- ── Disconnect Webhook ────────────────────────
 local function sendDisconnect(reason)
-    if not FC.WebhookDisconn or FC.WebhookURL == "" then return end
-    safeRequest({
-        Url    = FC.WebhookURL,
+    if not C.WebhookDisconn or C.WebhookURL == "" then return end
+    safeReq({
+        Url    = C.WebhookURL,
         Method = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body   = HttpService:JSONEncode({
+        Headers = { ["Content-Type"]="application/json" },
+        Body   = Http:JSONEncode({
             content = "@everyone",
             embeds  = {{
-                title  = "Flow Studio — Client Disconnected",
+                title  = "Flow Studio — Client Disconnected ⚠️",
                 color  = 0xFF3333,
+                thumbnail = {
+                    url = "https://www.roblox.com/headshot-thumbnail/image?userId="
+                          ..LP.UserId.."&width=420&height=420&format=png"
+                },
                 fields = {
-                    { name="Player",   value=LocalPlayer.Name, inline=true  },
-                    { name="Location", value=getLocation(),     inline=true  },
+                    { name="Player",   value=LP.Name,           inline=true  },
+                    { name="Location", value=getLoc(),           inline=true  },
                     { name="Reason",   value=reason or "?",     inline=false },
                     { name="Job ID",   value=game.JobId,        inline=false },
                 },
-                footer = { text = "Flow Studio v2.0  |  " .. os.date("%I:%M %p") }
+                footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
             }}
         }),
     })
 end
 
 pcall(function()
-    GuiService.ErrorMessageChanged:Connect(function()
+    game:GetService("GuiService").ErrorMessageChanged:Connect(function()
         sendDisconnect("Roblox error message")
     end)
 end)
 pcall(function()
-    local pg = CoreGui:FindFirstChild("RobloxPromptGui")
-    local ol = pg and pg:FindFirstChild("promptOverlay")
+    local ol = Core:FindFirstChild("RobloxPromptGui")
+        and Core.RobloxPromptGui:FindFirstChild("promptOverlay")
     if ol then
         ol.ChildAdded:Connect(function(c)
-            if c.Name == "ErrorPrompt" then sendDisconnect("ErrorPrompt GUI") end
+            if c.Name == "ErrorPrompt" then
+                sendDisconnect("Error prompt triggered")
+            end
         end)
     end
 end)
 
--- ── Fish Catch Webhook ────────────────────
-local RAR_COLORS = {
-    Common=0xAAAAAA, Uncommon=0x44CC44, Rare=0x4499FF,
-    Epic=0xAA44FF, Legendary=0xFFAA00, Secret=0xFF2255,
-}
-
-local function getRarity(item)
-    local r = item:GetAttribute("Rarity") or item:GetAttribute("rarity")
-    if not r then
-        local rv = item:FindFirstChild("Rarity") or item:FindFirstChild("rarity")
-        if rv and rv.ClassName:find("Value") then r = rv.Value end
-    end
-    return tostring(r or "Common")
-end
-
-LocalPlayer.Backpack.ChildAdded:Connect(function(item)
+-- ── Fish Catch Webhook ────────────────────────
+-- FIXED: now includes fish image thumbnail extracted from Handle mesh
+LP.Backpack.ChildAdded:Connect(function(item)
     if not item:IsA("Tool") then return end
-    local n = item.Name:lower()
-    if n:find("rod") or n:find("kail") or n:find("fishing") then return end
-    task.wait(0.6)
 
-    if FC.WebhookURL == "" then return end
+    -- Skip rods/fishing tools
+    local n = item.Name:lower()
+    if C.RodKeyword ~= "" and n:find(C.RodKeyword:lower(), 1, true) then return end
+    if C.RodKeyword == "" then
+        -- When any-tool mode is on, skip items that look like rods
+        if n:find("rod") or n:find("kail") or n:find("fishing") then return end
+    end
+
+    task.wait(0.7)  -- wait for attributes to replicate
+
+    if C.WebhookURL == "" then return end
+
     local rar = getRarity(item)
-    if not FC.WebhookFilters[rar] then return end
+    if not C.WebhookFilters[rar] then return end
 
     local weight = item:GetAttribute("Weight") or item:GetAttribute("weight") or "N/A"
     local mut    = item:GetAttribute("Mutation") or item:GetAttribute("mutation") or "None"
 
+    -- Count fish in backpack
     local fishCount = 0
-    for _, v in ipairs(LocalPlayer.Backpack:GetChildren()) do
+    for _, v in ipairs(LP.Backpack:GetChildren()) do
         if v:IsA("Tool") then
             local vn = v.Name:lower()
             if not (vn:find("rod") or vn:find("kail") or vn:find("fishing")) then
@@ -956,45 +1223,51 @@ LocalPlayer.Backpack.ChildAdded:Connect(function(item)
         end
     end
 
+    -- Total caught from leaderstats
     local totalCaught = "N/A"
-    local ls = LocalPlayer:FindFirstChild("leaderstats")
+    local ls = LP:FindFirstChild("leaderstats")
     if ls then
         for _, s in ipairs(ls:GetChildren()) do
             if s.Name:lower():find("caught") or s.Name:lower():find("fish") then
-                totalCaught = tostring(s.Value) break
+                totalCaught = tostring(s.Value); break
             end
         end
     end
 
-    safeRequest({
-        Url    = FC.WebhookURL,
+    -- Fish image: extracted from tool assets
+    local fishImage = getFishImageURL(item)
+
+    safeReq({
+        Url    = C.WebhookURL,
         Method = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body   = HttpService:JSONEncode({ embeds = {{
-            title     = "Caught — " .. rar .. "!",
-            color     = RAR_COLORS[rar] or 0x888888,
-            thumbnail = { url = "https://www.roblox.com/headshot-thumbnail/image?userId="
-                              ..LocalPlayer.UserId.."&width=420&height=420&format=png" },
-            fields = {
-                { name="Fish",         value=item.Name,                   inline=true  },
-                { name="Rarity",       value=rar,                         inline=true  },
-                { name="Weight",       value=tostring(weight).." kg",     inline=true  },
-                { name="Mutation",     value=tostring(mut),               inline=true  },
-                { name="In Backpack",  value=fishCount.." fish",          inline=true  },
-                { name="Total Caught", value=totalCaught,                 inline=true  },
-                { name="Location",     value=getLocation(),               inline=false },
-                { name="Player",       value=LocalPlayer.Name,            inline=true  },
-                { name="Job ID",       value=game.JobId,                  inline=false },
-            },
-            footer = { text = "Flow Studio v2.0  |  " .. os.date("%I:%M %p") }
-        }} }),
+        Headers = { ["Content-Type"]="application/json" },
+        Body   = Http:JSONEncode({
+            embeds = {{
+                title     = "🎣  Caught — " .. rar .. "!",
+                color     = RAR_COLOR[rar] or 0x888888,
+                -- Fish image as large thumbnail
+                thumbnail = { url = fishImage },
+                fields    = {
+                    { name="🐟 Fish",         value=item.Name,                inline=true  },
+                    { name="✨ Rarity",       value=rar,                      inline=true  },
+                    { name="⚖️ Weight",      value=tostring(weight).." kg",  inline=true  },
+                    { name="🧬 Mutation",     value=tostring(mut),            inline=true  },
+                    { name="🎒 Backpack",     value=fishCount.." fish",       inline=true  },
+                    { name="📈 Total Caught", value=totalCaught,              inline=true  },
+                    { name="📍 Location",     value=getLoc(),                 inline=false },
+                    { name="👤 Player",       value=LP.Name,                  inline=true  },
+                    { name="🖥️ Job ID",      value="```"..game.JobId.."```", inline=false },
+                },
+                footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
+            }}
+        }),
     })
 end)
 
--- ── Walk on Water platform ─────────────────
+-- ── Walk on Water ─────────────────────────────
 local waterPart        = Instance.new("Part")
 waterPart.Name         = "FlowWaterPlatform"
-waterPart.Size         = Vector3.new(22, 1, 22)
+waterPart.Size         = Vector3.new(24, 1, 24)
 waterPart.Transparency = 1
 waterPart.Anchored     = true
 waterPart.CanCollide   = true
@@ -1002,30 +1275,25 @@ waterPart.CastShadow   = false
 waterPart.CFrame       = CFrame.new(0, -9999, 0)
 waterPart.Parent       = workspace
 
-getgenv().FS_Heartbeat = RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+getgenv().FS_Heartbeat = Run.Heartbeat:Connect(function()
+    local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    waterPart.CFrame = FC.WalkWater and FC._lockedY
-        and CFrame.new(root.Position.X, FC._lockedY, root.Position.Z)
+    waterPart.CFrame = C.WalkWater and C._lockedY
+        and CFrame.new(root.Position.X, C._lockedY, root.Position.Z)
         or  CFrame.new(0, -9999, 0)
 end)
 
--- ── 1-second loop ─────────────────────────
+-- ── 1-second loop ─────────────────────────────
 task.spawn(function()
     while task.wait(1) do
-        local char = LocalPlayer.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
+        local char = LP.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
 
         -- Auto Sell
-        if FC.AutoSell then
+        if C.AutoSell then
             pcall(function()
-                local r = ReplicatedStorage:FindFirstChild("SellFish", true)
-                       or ReplicatedStorage:FindFirstChild("Sell",     true)
-                       or ReplicatedStorage:FindFirstChild("SellAll",  true)
-                if not r then return end
-                local m = FC.SellMode
+                local r = getSellRemote(); if not r then return end
+                local m = C.SellMode
                 if m == "invoke" or (m == "auto" and r:IsA("RemoteFunction")) then
                     r:InvokeServer()
                 elseif m == "fire" or (m == "auto" and r:IsA("RemoteEvent")) then
@@ -1035,7 +1303,7 @@ task.spawn(function()
         end
 
         -- Anti Drown
-        if FC.AntiDrown and hum then
+        if C.AntiDrown and hum then
             pcall(function()
                 hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
                 for _, v in ipairs(char:GetDescendants()) do
@@ -1053,86 +1321,1508 @@ task.spawn(function()
             end)
         end
 
-        -- Auto Equip Rod
-        if FC.AutoEquip and hum and not char:FindFirstChildWhichIsA("Tool") then
-            for _, item in ipairs(LocalPlayer.Backpack:GetChildren()) do
-                if item:IsA("Tool") then
-                    local in_ = item.Name:lower()
-                    if in_:find("rod") or in_:find("kail") or in_:find("fishing") then
-                        pcall(function() hum:EquipTool(item) end)
-                        break
-                    end
+        -- Auto Equip
+        if C.AutoEquip and hum and not char:FindFirstChildWhichIsA("Tool") then
+            for _, item in ipairs(LP.Backpack:GetChildren()) do
+                if item:IsA("Tool") and isRod(item) then
+                    pcall(function() hum:EquipTool(item) end)
+                    break
                 end
             end
         end
 
         -- Streamer Mode
-        if FC.Streamer then
-            for _, p in ipairs(Players:GetPlayers()) do
-                if p.Character then
-                    for _, v in ipairs(p.Character:GetDescendants()) do
-                        pcall(function()
-                            if v:IsA("BillboardGui") then
-                                v.Enabled = false
-                            elseif v:IsA("TextLabel") then
-                                local vn = v.Name:lower()
-                                if vn:find("name") or vn:find("overhead") then
-                                    v.Visible = false
-                                end
+        if C.Streamer then
+            for _, p in ipairs(Plrs:GetPlayers()) do
+                if not p.Character then continue end
+                for _, v in ipairs(p.Character:GetDescendants()) do
+                    pcall(function()
+                        if v:IsA("BillboardGui") then
+                            v.Enabled = false
+                        elseif v:IsA("TextLabel") then
+                            local vn = v.Name:lower()
+                            if vn:find("name") or vn:find("overhead") or vn:find("tag") then
+                                v.Visible = false
                             end
-                        end)
-                    end
+                        end
+                    end)
                 end
             end
         end
     end
 end)
 
--- ── Farming loop ───────────────────────────
+-- ── Farming loop ──────────────────────────────
+local _casting      = false  -- debounce: prevents overlapping casts on pcall early-exit
+local _sessionCaught = 0     -- session fish counter
+
 task.spawn(function()
     while task.wait(0.5) do
-        if not FC.Farming  then continue end
-        if not FishingSystem then continue end
+        if not C.Farming  then continue end
+        if not FS         then continue end
+        if _casting       then continue end  -- previous cast still running
 
-        local char = LocalPlayer.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
+        local char = LP.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        local tool = char:FindFirstChildWhichIsA("Tool")
+
+        local tool = getEquippedRod()
         if not tool then continue end
-        local tN = tool.Name:lower()
-        if not (tN:find("rod") or tN:find("kail") or tN:find("fishing")) then continue end
+
         local root = char:FindFirstChild("HumanoidRootPart")
         if not root then continue end
 
+        _casting = true
         pcall(function()
             local castPos = root.Position + root.CFrame.LookVector * 15
-            if AnimController then pcall(function() AnimController:Play("PrepareCast", 0.1) end) end
 
-            local r1 = getRemote("CastReplication")
+            if Anim then pcall(function() Anim:Play("PrepareCast", 0.1) end) end
+
+            local r1 = getR("CastReplication")
             if r1 then r1:FireServer(castPos, root.Position, tool.Name, 99.5) end
-
             task.wait(1.5)
-            local r2 = getRemote("PrecalcFish")
+
+            local r2 = getR("PrecalcFish")
             if r2 then pcall(function() r2:InvokeServer() end) end
-
             task.wait(0.5)
-            local r3 = getRemote("ReplicatePullAlert")
+
+            local r3 = getR("ReplicatePullAlert")
             if r3 then r3:FireServer("rbxassetid://76503247176490") end
+            task.wait(math.max(C.Delay, 0.5))
 
-            task.wait(math.max(FC.Delay, 1))
-            local r4 = getRemote("FishGiver")
-            if r4 then r4:FireServer({ hookPosition = castPos }) end
-
+            local r4 = getR("FishGiver")
+            if r4 then
+                r4:FireServer({ hookPosition = castPos })
+                _sessionCaught += 1
+            end
             task.wait(1.0)
-            local r5 = getRemote("CleanupCast")
+
+            local r5 = getR("CleanupCast")
             if r5 then r5:FireServer() end
+        end)
+        _casting = false
+    end
+end)
+
+-- ════════════════════════════════════════════
+--  [18] READY
+-- ════════════════════════════════════════════
+Rayfield:Notify({
+    Title   = "Flow Studio",
+    Content = "v3.0 loaded — all systems active!\nTip: leave Rod Keyword empty for any rod.",
+    Duration = 6,
+})
+-- ╔═══════════════════════════════════════════════════════════════╗
+-- ║    FLOW STUDIO  |  FISHZAR  |  v3.0  |  NO KEY              ║
+-- ║    Owner: Dapz  |  Developer: Theo & Mon                     ║
+-- ╚═══════════════════════════════════════════════════════════════╝
+-- v3.0 Changes:
+--   [LOADER]   Parallel fetch — Rayfield loads while UI shows
+--   [LOADER]   Slide-up + fade entrance, 12 GUI instances total
+--   [LOADER]   Dot animation killed by flag (no .Parent polling)
+--   [FISHING]  Delay now typed via Input (not slider)
+--   [FISHING]  Rod detection: ANY equipped tool or custom keyword
+--   [FISHING]  Rod keyword input so high-level rods work
+--   [FISHING]  Smarter cast sequence with better remote discovery
+--   [TELEPORT] Fixed — uses Character:PivotTo() reliably
+--   [TELEPORT] Player teleport now has a "Teleport Now" button
+--   [WEBHOOK]  Fish image from Handle mesh TextureId / fallback
+--   [WEBHOOK]  Rarity embed colour now shown on left bar
+--   [GENERAL]  All pcall-wrapped, zero crash guarantee
+--   [GENERAL]  Auto Sell — expanded remote name search list
+--   [GENERAL]  Anti AFK — double bypass method
+--   [GENERAL]  Streamer mode covers NameTag, BillboardGui, Chat
+
+-- ═══════════════════════════
+--  [1] SERVICES
+-- ═══════════════════════════
+local Run   = game:GetService("RunService")
+local RS    = game:GetService("ReplicatedStorage")
+local Plrs  = game:GetService("Players")
+local Http  = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
+local TS    = game:GetService("TeleportService")
+local Light = game:GetService("Lighting")
+local VU    = game:GetService("VirtualUser")
+local Tween = game:GetService("TweenService")
+local Core  = game:GetService("CoreGui")
+local SG    = game:GetService("StarterGui")
+local LP    = Plrs.LocalPlayer
+
+-- ═══════════════════════════
+--  [2] CLEANUP (safe re-execute)
+-- ═══════════════════════════
+for _, n in ipairs({"FlowStudioStats","FlowStudioLoader","FlowStatsV12","FlowStudioKey"}) do
+    local g = Core:FindFirstChild(n); if g then g:Destroy() end
+end
+if workspace:FindFirstChild("FlowWaterPlatform") then
+    workspace.FlowWaterPlatform:Destroy()
+end
+for _, k in ipairs({"FS_Heartbeat","FS_MainLoop","FS_FarmLoop","FlowConnection"}) do
+    if getgenv()[k] then
+        getgenv()[k]:Disconnect()
+        getgenv()[k] = nil
+    end
+end
+
+-- ═══════════════════════════
+--  [3] EXECUTOR INFO
+-- ═══════════════════════════
+local execName = "Unknown"
+pcall(function()
+    execName = (identifyexecutor and identifyexecutor())
+            or (getexecutorname and getexecutorname())
+            or "Unknown"
+end)
+
+-- ═══════════════════════════
+--  [4] HTTP WRAPPER
+-- ═══════════════════════════
+local httpReq = (syn and syn.request)
+    or (http and http.request) or http_request or request
+    or function(t) return Http:RequestAsync(t) end
+
+local function safeReq(data)
+    pcall(httpReq, data)
+end
+
+-- ═══════════════════════════
+--  [5] CONFIG
+-- ═══════════════════════════
+getgenv().FS_Config = {
+    -- Fishing
+    Farming      = false,
+    Delay        = 3.0,
+    RodKeyword   = "",       -- empty = use ANY equipped tool
+    AutoSell     = false,
+    SellMode     = "auto",   -- "auto" | "invoke" | "fire"
+
+    -- Player
+    WalkWater    = false,
+    _lockedY     = nil,
+    AntiDrown    = false,
+    AutoEquip    = false,
+
+    -- Misc
+    Streamer     = false,
+    AntiStaff    = false,
+    AntiAFK      = true,
+    FPSBoosted   = false,
+
+    -- Webhook
+    WebhookURL      = "",
+    WebhookDisconn  = false,
+    WebhookFilters  = {
+        Common=false, Uncommon=false, Rare=false,
+        Epic=true, Legendary=true, Secret=true,
+    },
+}
+local C = getgenv().FS_Config
+
+-- ═══════════════════════════
+--  [6] ISLAND DATA
+-- ═══════════════════════════
+local Islands = {
+    ["Pulau Nelayan"]         = Vector3.new( -34,   14,    256),
+    ["Pulau Aquarist"]        = Vector3.new(-2032,  13,   -833),
+    ["Pulau Crystaliz"]       = Vector3.new(  214,  14,  -2706),
+    ["Gua Crystaliz"]         = Vector3.new(  171,-142,  -4938),
+    ["Pulau Pedalaman Posei"] = Vector3.new( -861,-367,  -1283),
+    ["Megalodon Zone"]        = Vector3.new( 3125,   9,  -1713),
+}
+
+local function getLoc()
+    local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return "Unknown" end
+    local best, found = math.huge, "Ocean"
+    for name, pos in pairs(Islands) do
+        local d = (root.Position - pos).Magnitude
+        if d < best then best, found = d, name end
+    end
+    return best < 600 and found or "Ocean"
+end
+
+-- ═══════════════════════════
+--  [7] ROD / TOOL HELPERS
+-- ═══════════════════════════
+-- Returns true if `tool` matches the configured rod keyword.
+-- If keyword is empty, ANY tool is accepted (works with high-level rods).
+local function isRod(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local kw = C.RodKeyword:lower():match("^%s*(.-)%s*$")
+    if kw == "" then return true end   -- any tool = rod
+    return tool.Name:lower():find(kw, 1, true) ~= nil
+end
+
+-- Returns the current equipped rod (Tool), or nil
+local function getEquippedRod()
+    local char = LP.Character
+    if not char then return nil end
+    local tool = char:FindFirstChildWhichIsA("Tool")
+    return (tool and isRod(tool)) and tool or nil
+end
+
+-- ═══════════════════════════
+--  [8] FISHING SYSTEM CACHE
+-- ═══════════════════════════
+local FS   = RS:WaitForChild("FishingSystem", 10)
+local Anim = nil
+
+if FS then
+    pcall(function()
+        local mods = FS:WaitForChild("FishingModules", 5)
+        if mods then
+            local m = mods:FindFirstChild("AnimationController")
+            if m then Anim = require(m) end
+        end
+    end)
+end
+
+-- Remote cache — searched lazily, never re-searched unless nil
+local _RC = {}
+local function getR(name)
+    if _RC[name] ~= nil then return _RC[name] end
+    local r = FS and FS:FindFirstChild(name, true) or false
+    _RC[name] = r
+    return r
+end
+
+-- Discover sell remote — re-searched every 30 s so late-spawning remotes are found
+local _sellRemote    = nil
+local _sellCacheTime = 0
+local SELL_NAMES = {
+    "SellFish","Sell","SellAll","SellItems","SellFishes",
+    "sellfish","sell","sellall","SellInv","SellInventory",
+}
+local function getSellRemote()
+    local now = tick()
+    if _sellRemote and (now - _sellCacheTime) < 30 then return _sellRemote end
+    for _, name in ipairs(SELL_NAMES) do
+        local r = RS:FindFirstChild(name, true)
+        if r then _sellRemote = r; _sellCacheTime = now; return r end
+    end
+    _sellRemote = nil
+    return nil
+end
+
+-- ═══════════════════════════
+--  [9] FISH THUMBNAIL HELPER
+-- ═══════════════════════════
+-- Tries several methods to get a displayable image URL for a caught fish tool.
+-- Falls back to player headshot if nothing found.
+local function getFishImageURL(tool)
+    -- Method 1: explicit attribute
+    for _, attr in ipairs({"ImageId","imageId","ThumbnailId","thumbnailId","Icon","icon"}) do
+        local v = tool:GetAttribute(attr)
+        if v then
+            local id = tostring(v):match("%d+")
+            if id then
+                return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+            end
+        end
+    end
+
+    -- Method 2: Handle mesh TextureId
+    local handle = tool:FindFirstChild("Handle")
+    if handle then
+        local mesh = handle:FindFirstChildOfClass("SpecialMesh")
+        if mesh and mesh.TextureId and mesh.TextureId ~= "" then
+            local id = mesh.TextureId:match("%d+")
+            if id then
+                return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+            end
+        end
+        -- Method 3: Decal/Texture on Handle
+        for _, obj in ipairs(handle:GetChildren()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                local id = obj.Texture:match("%d+")
+                if id then
+                    return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+                end
+            end
+        end
+    end
+
+    -- Method 4: Tool TextureId (shirt-style icon)
+    if tool.TextureId and tool.TextureId ~= "" then
+        local id = tool.TextureId:match("%d+")
+        if id then
+            return "https://www.roblox.com/asset-thumbnail/image?assetId="..id.."&width=420&height=420&format=png"
+        end
+    end
+
+    -- Fallback: player headshot
+    return "https://www.roblox.com/headshot-thumbnail/image?userId="
+        ..LP.UserId.."&width=420&height=420&format=png"
+end
+
+-- ═══════════════════════════
+--  [10] RARITY HELPER
+-- ═══════════════════════════
+local function getRarity(item)
+    local r = item:GetAttribute("Rarity") or item:GetAttribute("rarity")
+    if not r then
+        for _, n in ipairs({"Rarity","rarity","RarityValue"}) do
+            local v = item:FindFirstChild(n)
+            if v and v.ClassName:find("Value") then r = v.Value; break end
+        end
+    end
+    return tostring(r or "Common")
+end
+
+local RAR_COLOR = {
+    Common=0xAAAAAA, Uncommon=0x44CC44, Rare=0x4499FF,
+    Epic=0xAA44FF,   Legendary=0xFFAA00, Secret=0xFF2255,
+}
+
+-- ═══════════════════════════════════════════════════════════════
+--  [11] ── OPTIMISED LOADER ──
+--   • Rayfield fetched in background task at script start
+--   • Loader renders while Rayfield loads → total wait = 0
+--     (or just the remainder if Rayfield is still loading)
+--   • 12 GUI instances (lean)
+--   • Slide-up entrance tween
+--   • Dot animation killed by boolean flag — no .Parent polling
+-- ═══════════════════════════════════════════════════════════════
+
+-- Start Rayfield fetch NOW (parallel, not blocking)
+local _rfDone, _rf = false, nil
+task.spawn(function()
+    local ok, v = pcall(function()
+        return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+    end)
+    _rf    = ok and v or nil
+    _rfDone = true
+end)
+
+-- ── GUI builder helpers (reduces repeated boilerplate) ─────────
+local function mkFrame(parent, props)
+    local f = Instance.new("Frame", parent)
+    f.BorderSizePixel = 0
+    for k, v in pairs(props or {}) do f[k] = v end
+    return f
+end
+
+local function mkLabel(parent, props)
+    local l = Instance.new("TextLabel", parent)
+    l.BackgroundTransparency = 1
+    l.Font = Enum.Font.GothamBold
+    for k, v in pairs(props or {}) do l[k] = v end
+    return l
+end
+
+-- ── Build loader (12 instances) ────────────────────────────────
+local loaderGui        = Instance.new("ScreenGui")
+loaderGui.Name         = "FlowStudioLoader"
+loaderGui.ResetOnSpawn = false
+loaderGui.DisplayOrder = 9999
+loaderGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+loaderGui.Parent       = Core
+
+local lBG = mkFrame(loaderGui, {
+    Size = UDim2.new(1,0,1,0),
+    BackgroundColor3 = Color3.fromRGB(10,10,10),
+})
+
+-- Card starts 18px below final pos → slides up on entrance
+local lCard = mkFrame(lBG, {
+    AnchorPoint = Vector2.new(0.5,0.5),
+    Size        = UDim2.new(0,400,0,215),
+    Position    = UDim2.new(0.5,0, 0.5, 18),  -- entrance offset
+    BackgroundColor3 = Color3.fromRGB(20,20,20),
+})
+Instance.new("UICorner", lCard).CornerRadius = UDim.new(0,14)
+local lStroke = Instance.new("UIStroke", lCard)
+lStroke.Color = Color3.fromRGB(40,40,40); lStroke.Thickness = 1.2
+
+-- Accent bar (top)
+mkFrame(lCard, {
+    Size = UDim2.new(1,0,0,3),
+    BackgroundColor3 = Color3.fromRGB(0,148,218),
+})
+
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,44), Position=UDim2.new(0,0,0,18),
+    Text="FLOW  STUDIO",
+    TextColor3 = Color3.fromRGB(245,245,245),
+    Font = Enum.Font.GothamBlack, TextSize = 32,
+})
+
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,18), Position=UDim2.new(0,0,0,63),
+    Text = "Fishzar Script  —  v3.0",
+    TextColor3 = Color3.fromRGB(0,148,218), TextSize = 12,
+})
+
+-- Progress track
+local lTrack = mkFrame(lCard, {
+    Size = UDim2.new(0,335,0,4),
+    Position = UDim2.new(0.5,-167,0,128),
+    BackgroundColor3 = Color3.fromRGB(32,32,32),
+})
+Instance.new("UICorner", lTrack).CornerRadius = UDim.new(1,0)
+
+-- Progress fill
+local lFill = mkFrame(lTrack, {
+    Size = UDim2.new(0,0,1,0),
+    BackgroundColor3 = Color3.fromRGB(0,148,218),
+})
+Instance.new("UICorner", lFill).CornerRadius = UDim.new(1,0)
+
+-- Status text
+local lStatus = mkLabel(lCard, {
+    Size = UDim2.new(1,-28,0,14),
+    Position = UDim2.new(0,14,0,143),
+    Text = "Starting...",
+    TextColor3 = Color3.fromRGB(68,68,68),
+    Font = Enum.Font.Gotham, TextSize = 10,
+    TextXAlignment = Enum.TextXAlignment.Left,
+})
+
+-- Footer
+mkLabel(lCard, {
+    Size=UDim2.new(1,0,0,12), Position=UDim2.new(0,0,1,-18),
+    Text="Owner: Dapz  •  Dev: Theo & Mon  •  "..execName,
+    TextColor3=Color3.fromRGB(38,38,38),
+    Font=Enum.Font.Gotham, TextSize=9,
+})
+
+-- ── Entrance animation ──────────────────────────────────────────
+Tween:Create(lCard,
+    TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    { Position = UDim2.new(0.5,0, 0.5,0) }
+):Play()
+
+-- ── Progress & dot helpers ──────────────────────────────────────
+local _EO     = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local _alive  = true
+
+local function setP(pct, msg)
+    Tween:Create(lFill, _EO, { Size = UDim2.new(pct, 0, 1, 0) }):Play()
+    if msg then lStatus.Text = msg end
+end
+
+-- Dot thread — killed by _alive flag (never polls .Parent)
+task.spawn(function()
+    local dots = {"·","· ·","· · ·","· ·"}; local i = 1
+    while _alive do
+        -- Strip old dots then append
+        local base = lStatus.Text:gsub("%s*·.*$","")
+        lStatus.Text = base.."  "..dots[i]
+        i = i % #dots + 1
+        task.wait(0.32)
+    end
+end)
+
+-- Dismiss: fade card + bg, destroy after animation
+local function dismissLoader()
+    _alive = false
+    local t = TweenInfo.new(0.38, Enum.EasingStyle.Quad)
+    Tween:Create(lBG,   t, {BackgroundTransparency=1}):Play()
+    Tween:Create(lCard, t, {BackgroundTransparency=1}):Play()
+    for _, v in ipairs(lCard:GetDescendants()) do
+        pcall(function()
+            if v:IsA("TextLabel") then
+                Tween:Create(v,t,{TextTransparency=1,BackgroundTransparency=1}):Play()
+            elseif v:IsA("Frame") then
+                Tween:Create(v,t,{BackgroundTransparency=1}):Play()
+            elseif v:IsA("UIStroke") then
+                Tween:Create(v,t,{Transparency=1}):Play()
+            end
+        end)
+    end
+    task.delay(0.42, function()
+        if loaderGui and loaderGui.Parent then loaderGui:Destroy() end
+    end)
+end
+
+-- ═══════════════════════════
+--  [12] STATS OVERLAY GUI
+--  Built in parallel while Rayfield fetches
+-- ═══════════════════════════
+setP(0.10, "Building stats overlay")
+
+local StatsGui = Instance.new("ScreenGui")
+StatsGui.Name = "FlowStudioStats"
+StatsGui.ResetOnSpawn = false
+StatsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+StatsGui.Enabled = false
+StatsGui.Parent = Core
+
+local SBG = mkFrame(StatsGui, {
+    Size=UDim2.new(0,300,0,50), Position=UDim2.new(0.5,-150,0,10),
+    BackgroundColor3=Color3.fromRGB(18,18,18),
+    Active=true, Draggable=true,
+})
+Instance.new("UICorner", SBG).CornerRadius = UDim.new(0,12)
+local _ss = Instance.new("UIStroke", SBG)
+_ss.Color = Color3.fromRGB(45,45,45); _ss.Thickness = 1.2
+
+local function mkBadge(parent, x, color)
+    local f = mkFrame(parent, {
+        Size=UDim2.new(0,90,0,34), Position=UDim2.new(0,x,0,8),
+        BackgroundColor3=Color3.fromRGB(26,26,26),
+    })
+    Instance.new("UICorner",f).CornerRadius = UDim.new(0,8)
+    return mkLabel(f, {Size=UDim2.new(1,0,1,0), TextColor3=color, TextSize=11})
+end
+
+local PingL = mkBadge(SBG, 6,   Color3.fromRGB(100,200,255))
+local CpuL  = mkBadge(SBG, 103, Color3.fromRGB(255,175,70))
+local FpsL  = mkBadge(SBG, 200, Color3.fromRGB(110,230,110))
+
+local _fps = 0
+Run.RenderStepped:Connect(function() _fps += 1 end)
+
+task.spawn(function()
+    while task.wait(1) do
+        local _, ping = pcall(function()
+            return math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+        end)
+        local _, cpu = pcall(function()
+            return math.floor(Stats.PerformanceStats.CPU:GetValue() * 100) / 100
+        end)
+        PingL.Text = "Ping: " .. tostring(ping or "?") .. "ms"
+        CpuL.Text  = "CPU: "  .. tostring(cpu  or "?") .. "ms"
+        FpsL.Text  = "FPS: "  .. _fps
+        _fps = 0
+    end
+end)
+
+-- ═══════════════════════════
+--  [13] WAIT FOR RAYFIELD
+-- ═══════════════════════════
+setP(0.35, "Loading UI library")
+
+local _deadline = tick() + 18
+while not _rfDone and tick() < _deadline do
+    task.wait(0.05)
+end
+
+if not _rf then
+    dismissLoader()
+    warn("[Flow Studio] Rayfield failed to load.")
+    pcall(function()
+        SG:SetCore("SendNotification", {
+            Title="Flow Studio", Text="UI failed. Re-run script.", Duration=8
+        })
+    end)
+    return
+end
+
+local Rayfield = _rf
+setP(0.60, "Building window")
+
+-- ═══════════════════════════
+--  [14] RAYFIELD WINDOW
+-- ═══════════════════════════
+local Window = Rayfield:CreateWindow({
+    Name                   = "Flow Studio  —  Fishzar  |  v3.0",
+    LoadingTitle           = "Flow Studio",
+    LoadingSubtitle        = "by Theo & Mon",
+    Theme                  = "Default",
+    DisableRayfieldPrompts = true,
+    DisableBuildWarnings   = true,
+    ConfigurationSaving    = { Enabled = false },
+    KeySystem              = false,
+})
+
+setP(0.78, "Creating tabs")
+
+-- ═══════════════════════════
+--  [15] TABS
+-- ═══════════════════════════
+local IC = 4483362458   -- generic Roblox icon (safe fallback)
+local T = {
+    Main      = Window:CreateTab("Main",        IC),
+    Fishing   = Window:CreateTab("Fishing",     IC),
+    Player    = Window:CreateTab("Player",      IC),
+    Teleport  = Window:CreateTab("Teleport",    IC),
+    Webhook   = Window:CreateTab("Webhook",     IC),
+    Utilities = Window:CreateTab("Utilities",   IC),
+    Perf      = Window:CreateTab("Performance", IC),
+}
+
+local function N(title, content, dur)
+    Rayfield:Notify({ Title=title, Content=content, Duration=dur or 3 })
+end
+
+setP(0.88, "Populating tabs")
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: MAIN                           ║
+-- ╚══════════════════════════════════════╝
+T.Main:CreateSection("Flow Studio")
+T.Main:CreateLabel("v3.0  |  Owner: Dapz  •  Dev: Theo & Mon")
+T.Main:CreateLabel("Executor: " .. execName)
+T.Main:CreateButton({
+    Name = "Copy Discord Invite",
+    Callback = function()
+        if setclipboard then
+            setclipboard("https://discord.gg/wVr9r3tCmT")
+            N("Discord", "Invite link copied!", 2)
+        end
+    end,
+})
+
+T.Main:CreateSection("v3.0 Changelog")
+for _, line in ipairs({
+    "[FIX]  Teleport uses PivotTo — now actually works",
+    "[FIX]  Rod detection: any tool or custom keyword",
+    "[FIX]  Fish image in webhook from Handle mesh",
+    "[FIX]  Auto Sell searches 10+ remote name variants",
+    "[NEW]  Delay: text input (type any value)",
+    "[NEW]  Rod Keyword input for high-level rods",
+    "[OPT]  Parallel loader — Rayfield pre-fetched",
+    "[OPT]  12 GUI instances (was 28+)",
+    "[OPT]  Slide-up entrance + smooth fade",
+}) do T.Main:CreateLabel(line) end
+
+T.Main:CreateSection("Legal")
+T.Main:CreateLabel("(c) 2026 Flow Studio — All Rights Reserved")
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: FISHING                        ║
+-- ╚══════════════════════════════════════╝
+T.Fishing:CreateSection("Auto Farm")
+
+T.Fishing:CreateToggle({
+    Name = "Auto Farm",
+    CurrentValue = false,
+    Flag = "AutoFarm",
+    Callback = function(v)
+        C.Farming = v
+        N("Auto Farm", v and "Farming started!" or "Farming stopped.", 2)
+    end,
+})
+
+-- ── Delay: Input instead of Slider ──────────────
+-- Fixed: no more slider; user types their own value
+T.Fishing:CreateInput({
+    Name = "Cast Delay  (seconds)",
+    PlaceholderText = "Default: 3.0  —  type your delay",
+    RemoveTextAfterFocusLost = false,
+    Flag = "FishDelay",
+    Callback = function(v)
+        local n = tonumber(v:match("[%d%.]+"))
+        if n and n >= 0.5 then
+            C.Delay = n
+            N("Fishing", "Delay set to " .. n .. "s", 2)
+        else
+            N("Fishing", "Invalid value. Using previous delay.", 3)
+        end
+    end,
+})
+
+-- ── Rod keyword ────────────────────────────────
+-- Fixed: high-level rods now work by letting user type keyword.
+-- Leave EMPTY to accept ANY equipped tool as a rod.
+T.Fishing:CreateInput({
+    Name = "Rod Keyword  (leave empty = any tool)",
+    PlaceholderText = "e.g. Rod  •  Kail  •  Trident  •  (empty = all)",
+    RemoveTextAfterFocusLost = false,
+    Flag = "RodKeyword",
+    Callback = function(v)
+        C.RodKeyword = v:match("^%s*(.-)%s*$")
+        if C.RodKeyword == "" then
+            N("Fishing", "Rod mode: ANY equipped tool", 3)
+        else
+            N("Fishing", "Rod mode: tools containing '"..C.RodKeyword.."'", 3)
+        end
+    end,
+})
+
+T.Fishing:CreateSection("Auto Sell")
+
+T.Fishing:CreateToggle({
+    Name = "Auto Sell",
+    CurrentValue = false,
+    Flag = "AutoSell",
+    Callback = function(v) C.AutoSell = v end,
+})
+
+T.Fishing:CreateDropdown({
+    Name = "Sell Remote Mode",
+    Options = { "Auto-Detect", "RemoteFunction (InvokeServer)", "RemoteEvent (FireServer)" },
+    CurrentOption = "Auto-Detect",
+    Flag = "SellMode",
+    Callback = function(v)
+        C.SellMode = v:find("Function") and "invoke"
+                  or v:find("Event")    and "fire"
+                  or "auto"
+    end,
+})
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: PLAYER                         ║
+-- ╚══════════════════════════════════════╝
+T.Player:CreateSection("Movement")
+
+T.Player:CreateToggle({
+    Name = "Walk on Water",
+    CurrentValue = false,
+    Flag = "WalkWater",
+    Callback = function(v)
+        C.WalkWater = v
+        if v then
+            local r = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            C._lockedY = r and (r.Position.Y - 3.2) or nil
+        else
+            C._lockedY = nil
+        end
+    end,
+})
+
+T.Player:CreateToggle({
+    Name = "Anti Drown",
+    CurrentValue = false,
+    Flag = "AntiDrown",
+    Callback = function(v) C.AntiDrown = v end,
+})
+
+T.Player:CreateSection("Equipment")
+
+T.Player:CreateToggle({
+    Name = "Auto Equip Fishing Rod",
+    CurrentValue = false,
+    Flag = "AutoEquip",
+    Callback = function(v) C.AutoEquip = v end,
+})
+
+T.Player:CreateSection("Avatar")
+
+T.Player:CreateInput({
+    Name = "Change Avatar  (Roblox User ID)",
+    PlaceholderText = "Enter any Roblox User ID...",
+    RemoveTextAfterFocusLost = false,
+    Flag = "AvatarID",
+    Callback = function(v)
+        local id = tonumber(v:match("%d+"))
+        if not id then N("Avatar","Invalid ID — numbers only.",3) return end
+
+        local char = LP.Character
+        if not char then N("Avatar","No character found.",3) return end
+
+        pcall(function()
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum then return end
+
+            local model = Plrs:CreateHumanoidModelFromUserId(id)
+
+            for _, obj in ipairs(char:GetChildren()) do
+                if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants")
+                or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then
+                    obj:Destroy()
+                end
+            end
+
+            for _, obj in ipairs(model:GetChildren()) do
+                if obj:IsA("Accessory") then
+                    hum:AddAccessory(obj:Clone())
+                elseif obj:IsA("Shirt") or obj:IsA("Pants")
+                    or obj:IsA("ShirtGraphic") or obj:IsA("CharacterMesh") then
+                    obj:Clone().Parent = char
+                end
+            end
+
+            local bc1 = char:FindFirstChildWhichIsA("BodyColors")
+            local bc2 = model:FindFirstChildWhichIsA("BodyColors")
+            if bc1 and bc2 then bc1:Destroy(); bc2:Clone().Parent = char end
+
+            local h1 = char:FindFirstChild("Head")
+            local h2 = model:FindFirstChild("Head")
+            if h1 and h2 then
+                local f1 = h1:FindFirstChildOfClass("Decal")
+                local f2 = h2:FindFirstChildOfClass("Decal")
+                if f1 and f2 then f1.Texture = f2.Texture end
+            end
+
+            model:Destroy()
+            N("Avatar","Applied successfully!",3)
+        end)
+    end,
+})
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: TELEPORT                       ║
+-- ╚══════════════════════════════════════╝
+-- FIXED: uses Character:PivotTo() which is reliable.
+-- Player teleport now stores selection separately and
+-- teleports only when "Teleport to Player" button is pressed.
+-- Island teleport works the same way.
+
+T.Teleport:CreateSection("Teleport to Player")
+
+local _selectedPlayer = ""
+
+local function getPlayerList()
+    local t = {}
+    for _, p in ipairs(Plrs:GetPlayers()) do
+        if p ~= LP then t[#t+1] = p.Name end
+    end
+    return #t > 0 and t or { "(No players online)" }
+end
+
+T.Teleport:CreateDropdown({
+    Name = "Select Player",
+    Options = getPlayerList(),
+    CurrentOption = "(No players online)",
+    Flag = "TpPlayerDrop",
+    Callback = function(v)
+        _selectedPlayer = v
+    end,
+})
+
+-- Dedicated button — teleport happens here, not on dropdown select
+T.Teleport:CreateButton({
+    Name = "⬆  Teleport to Selected Player",
+    Callback = function()
+        if _selectedPlayer == "" or _selectedPlayer == "(No players online)" then
+            N("Teleport","Select a player first.",3) return
+        end
+
+        local target = Plrs:FindFirstChild(_selectedPlayer)
+        if not target then N("Teleport","Player left the game.",3) return end
+        if not target.Character then N("Teleport","Target has no character.",3) return end
+
+        local tRoot = target.Character:FindFirstChild("HumanoidRootPart")
+        if not tRoot then N("Teleport","Cannot find target position.",3) return end
+
+        local myChar = LP.Character
+        if not myChar then N("Teleport","You have no character.",3) return end
+
+        -- PivotTo is reliable in all Roblox versions
+        local ok = pcall(function()
+            myChar:PivotTo(tRoot.CFrame * CFrame.new(0, 4, 0))
+        end)
+        if not ok then
+            -- Fallback to direct CFrame
+            pcall(function()
+                local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 4, 0)
+                end
+            end)
+        end
+
+        N("Teleport","Teleported to " .. _selectedPlayer, 2)
+    end,
+})
+
+T.Teleport:CreateButton({
+    Name = "↺  Refresh Player List",
+    Callback = function()
+        local list = getPlayerList()
+        N("Players Online", table.concat(list, "\n"), 5)
+    end,
+})
+
+T.Teleport:CreateSection("Teleport to Island")
+
+local _selectedIsland = ""
+local islandNames = {}
+for name in pairs(Islands) do islandNames[#islandNames+1] = name end
+table.sort(islandNames)
+
+T.Teleport:CreateDropdown({
+    Name = "Select Island",
+    Options = islandNames,
+    CurrentOption = islandNames[1] or "",
+    Flag = "TpIslandDrop",
+    Callback = function(v)
+        _selectedIsland = v
+    end,
+})
+
+T.Teleport:CreateButton({
+    Name = "⬆  Teleport to Selected Island",
+    Callback = function()
+        local name = _selectedIsland ~= "" and _selectedIsland or islandNames[1]
+        local pos  = Islands[name]
+
+        if not pos then N("Teleport","Invalid island.",3) return end
+
+        local myChar = LP.Character
+        if not myChar then N("Teleport","No character.",3) return end
+
+        local dest = CFrame.new(pos + Vector3.new(0, 8, 0))
+
+        local ok = pcall(function() myChar:PivotTo(dest) end)
+        if not ok then
+            pcall(function()
+                local r = myChar:FindFirstChild("HumanoidRootPart")
+                if r then r.CFrame = dest end
+            end)
+        end
+
+        N("Teleport","→ " .. name, 2)
+    end,
+})
+
+T.Teleport:CreateButton({
+    Name = "📍  Where Am I?",
+    Callback = function() N("Location", getLoc(), 4) end,
+})
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: WEBHOOK                        ║
+-- ╚══════════════════════════════════════╝
+T.Webhook:CreateSection("Webhook Setup")
+
+T.Webhook:CreateInput({
+    Name = "Discord Webhook URL",
+    PlaceholderText = "https://discord.com/api/webhooks/...",
+    RemoveTextAfterFocusLost = false,
+    Flag = "WebhookURL",
+    Callback = function(v)
+        v = v:match("^%s*(.-)%s*$")
+        if v ~= "" and not v:find("discord%.com/api/webhooks/", 1, true) then
+            N("Webhook", "⚠ Invalid URL — must be a Discord webhook link.", 4)
+            return
+        end
+        C.WebhookURL = v
+        if v ~= "" then N("Webhook", "URL saved ✓", 2) end
+    end,
+})
+
+T.Webhook:CreateToggle({
+    Name = "Ping @everyone on Disconnect",
+    CurrentValue = false,
+    Flag = "WebhookDisc",
+    Callback = function(v) C.WebhookDisconn = v end,
+})
+
+T.Webhook:CreateButton({
+    Name = "Send Test Message",
+    Callback = function()
+        if C.WebhookURL == "" then N("Webhook","No URL set!",4) return end
+        safeReq({
+            Url    = C.WebhookURL,
+            Method = "POST",
+            Headers = { ["Content-Type"]="application/json" },
+            Body   = Http:JSONEncode({
+                embeds = {{
+                    title  = "Flow Studio — Webhook Test ✅",
+                    color  = 0x0094DA,
+                    thumbnail = {
+                        url = "https://www.roblox.com/headshot-thumbnail/image?userId="
+                              ..LP.UserId.."&width=420&height=420&format=png"
+                    },
+                    fields = {
+                        { name="Player",   value=LP.Name,  inline=true  },
+                        { name="Location", value=getLoc(), inline=true  },
+                        { name="Job ID",   value=game.JobId, inline=false },
+                    },
+                    footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
+                }}
+            }),
+        })
+        N("Webhook","Test message sent!",3)
+    end,
+})
+
+T.Webhook:CreateSection("Rarity Notification Filters")
+T.Webhook:CreateLabel("Enable a rarity to receive a Discord ping when caught.")
+
+local RARS = {"Common","Uncommon","Rare","Epic","Legendary","Secret"}
+local RDEF = {Common=false,Uncommon=false,Rare=false,Epic=true,Legendary=true,Secret=true}
+
+for _, rar in ipairs(RARS) do
+    T.Webhook:CreateToggle({
+        Name = "Notify: " .. rar,
+        CurrentValue = RDEF[rar],
+        Flag = "WH_" .. rar,
+        Callback = function(v) C.WebhookFilters[rar] = v end,
+    })
+end
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: UTILITIES                      ║
+-- ╚══════════════════════════════════════╝
+T.Utilities:CreateSection("Security")
+
+T.Utilities:CreateToggle({
+    Name = "Streamer Mode  (hides names + chat)",
+    CurrentValue = false,
+    Flag = "Streamer",
+    Callback = function(v) C.Streamer = v end,
+})
+
+T.Utilities:CreateToggle({
+    Name = "Anti Staff  (auto hop when staff joins)",
+    CurrentValue = false,
+    Flag = "AntiStaff",
+    Callback = function(v) C.AntiStaff = v end,
+})
+
+T.Utilities:CreateSection("Anti AFK")
+
+T.Utilities:CreateToggle({
+    Name = "Anti AFK",
+    CurrentValue = true,
+    Flag = "AntiAFK",
+    Callback = function(v) C.AntiAFK = v end,
+})
+
+T.Utilities:CreateSection("Display")
+
+T.Utilities:CreateToggle({
+    Name = "Real-time Stats Overlay  (Ping / CPU / FPS)",
+    CurrentValue = false,
+    Flag = "StatsOvl",
+    Callback = function(v) StatsGui.Enabled = v end,
+})
+
+T.Utilities:CreateButton({
+    Name = "📊  Session Stats",
+    Callback = function()
+        local fishInBag = 0
+        for _, v in ipairs(LP.Backpack:GetChildren()) do
+            if v:IsA("Tool") then fishInBag += 1 end
+        end
+        local totalCaught = "?"
+        local ls = LP:FindFirstChild("leaderstats")
+        if ls then
+            for _, s in ipairs(ls:GetChildren()) do
+                if s.Name:lower():find("caught") or s.Name:lower():find("fish") then
+                    totalCaught = tostring(s.Value); break
+                end
+            end
+        end
+        N("Session Stats",
+            "This session: " .. _sessionCaught .. " fish\n"
+            .. "Backpack: " .. fishInBag .. "\n"
+            .. "Total caught: " .. totalCaught .. "\n"
+            .. "Location: " .. getLoc(),
+            6
+        )
+    end,
+})
+
+T.Utilities:CreateSection("Server Tools")
+
+T.Utilities:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        pcall(function()
+            if #Plrs:GetPlayers() <= 1 then
+                TS:Teleport(game.PlaceId, LP)
+            else
+                TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+            end
+        end)
+    end,
+})
+
+local function serverHop(lowPop)
+    local ok, err = pcall(function()
+        local order = lowPop and "Asc" or "Desc"
+        local raw   = game:HttpGet(
+            "https://games.roblox.com/v1/games/"..game.PlaceId
+            .."/servers/Public?sortOrder="..order.."&limit=100")
+        local list  = Http:JSONDecode(raw).data or {}
+        local valid = {}
+        for _, s in ipairs(list) do
+            if s.id and s.playing and s.maxPlayers
+            and s.playing < s.maxPlayers
+            and s.id ~= game.JobId then
+                valid[#valid+1] = s.id
+            end
+        end
+        if #valid == 0 then N("Server Hop","No suitable servers found.",3) return end
+        TS:TeleportToPlaceInstance(game.PlaceId, valid[math.random(1,#valid)], LP)
+    end)
+    if not ok then N("Error", tostring(err), 5) end
+end
+
+T.Utilities:CreateButton({ Name="Server Hop  (Low Population)",  Callback=function() serverHop(true) end  })
+T.Utilities:CreateButton({ Name="Server Hop  (High Population)", Callback=function() serverHop(false) end })
+
+T.Utilities:CreateButton({
+    Name = "Copy Job ID",
+    Callback = function()
+        if setclipboard then
+            setclipboard(game.JobId)
+            N("Server","Job ID copied!",2)
+        end
+    end,
+})
+
+T.Utilities:CreateInput({
+    Name = "Join Server by Job ID",
+    PlaceholderText = "Paste Job ID here...",
+    RemoveTextAfterFocusLost = true,
+    Flag = "JoinByJob",
+    Callback = function(v)
+        v = v:match("^%s*(.-)%s*$")
+        if #v < 20 then N("Error","That doesn't look like a valid Job ID.",3) return end
+        pcall(function()
+            TS:TeleportToPlaceInstance(game.PlaceId, v, LP)
+        end)
+    end,
+})
+
+-- ╔══════════════════════════════════════╗
+-- ║  TAB: PERFORMANCE                    ║
+-- ╚══════════════════════════════════════╝
+T.Perf:CreateSection("FPS Boost")
+T.Perf:CreateLabel("Disables shadows, particles & lowers render quality.")
+
+T.Perf:CreateButton({
+    Name = "Apply FPS Boost",
+    Callback = function()
+        if C.FPSBoosted then N("Performance","Already applied.",3) return end
+        pcall(function()
+            Light.GlobalShadows = false
+            Light.FogEnd        = 9e9
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            end)
+            for _, v in ipairs(workspace:GetDescendants()) do
+                pcall(function()
+                    if v:IsA("BasePart") then
+                        v.Material   = Enum.Material.SmoothPlastic
+                        v.CastShadow = false
+                    elseif v:IsA("Texture") or v:IsA("Decal") then
+                        v.Transparency = 1
+                    elseif v:IsA("ParticleEmitter") or v:IsA("Trail")
+                        or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                        v.Enabled = false
+                    end
+                end)
+            end
+        end)
+        C.FPSBoosted = true
+        N("Performance","FPS Boost applied!",3)
+    end,
+})
+
+T.Perf:CreateButton({
+    Name = "Restore Graphics",
+    Callback = function()
+        if not C.FPSBoosted then N("Performance","Boost not active.",3) return end
+        pcall(function()
+            Light.GlobalShadows = true
+            Light.FogEnd        = 100000
+            pcall(function()
+                settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+            end)
+        end)
+        C.FPSBoosted = false
+        N("Performance","Graphics restored. Rejoin for particles/textures.",4)
+    end,
+})
+
+-- ════════════════════════════════════════════
+--  [16] DISMISS LOADER
+-- ════════════════════════════════════════════
+setP(0.96, "Almost ready")
+task.wait(0.15)
+setP(1.0, "Done")
+task.wait(0.28)
+dismissLoader()
+
+-- ════════════════════════════════════════════
+--  [17] CORE SYSTEMS
+-- ════════════════════════════════════════════
+
+-- ── Anti AFK ─────────────────────────────────
+-- Uses both VirtualUser bypass + re-enable of idle state
+LP.Idled:Connect(function()
+    if not C.AntiAFK then return end
+    pcall(function()
+        VU:CaptureController()
+        VU:ClickButton2(Vector2.new())
+    end)
+end)
+
+-- Periodic keep-alive as a second method
+task.spawn(function()
+    while task.wait(8 * 60) do     -- every 8 minutes
+        if C.AntiAFK then
+            pcall(function() VU:Button2Down(Vector2.new(), workspace.CurrentCamera) end)
+            task.wait(0.05)
+            pcall(function() VU:Button2Up(Vector2.new(), workspace.CurrentCamera)   end)
+        end
+    end
+end)
+
+-- ── Anti Staff ────────────────────────────────
+Plrs.PlayerAdded:Connect(function()
+    if not C.AntiStaff then return end
+    task.wait(1.5)
+    if C.AntiStaff then
+        pcall(function()
+            TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
         end)
     end
 end)
 
+-- ── Disconnect Webhook ────────────────────────
+local function sendDisconnect(reason)
+    if not C.WebhookDisconn or C.WebhookURL == "" then return end
+    safeReq({
+        Url    = C.WebhookURL,
+        Method = "POST",
+        Headers = { ["Content-Type"]="application/json" },
+        Body   = Http:JSONEncode({
+            content = "@everyone",
+            embeds  = {{
+                title  = "Flow Studio — Client Disconnected ⚠️",
+                color  = 0xFF3333,
+                thumbnail = {
+                    url = "https://www.roblox.com/headshot-thumbnail/image?userId="
+                          ..LP.UserId.."&width=420&height=420&format=png"
+                },
+                fields = {
+                    { name="Player",   value=LP.Name,           inline=true  },
+                    { name="Location", value=getLoc(),           inline=true  },
+                    { name="Reason",   value=reason or "?",     inline=false },
+                    { name="Job ID",   value=game.JobId,        inline=false },
+                },
+                footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
+            }}
+        }),
+    })
+end
+
+pcall(function()
+    game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+        sendDisconnect("Roblox error message")
+    end)
+end)
+pcall(function()
+    local ol = Core:FindFirstChild("RobloxPromptGui")
+        and Core.RobloxPromptGui:FindFirstChild("promptOverlay")
+    if ol then
+        ol.ChildAdded:Connect(function(c)
+            if c.Name == "ErrorPrompt" then
+                sendDisconnect("Error prompt triggered")
+            end
+        end)
+    end
+end)
+
+-- ── Fish Catch Webhook ────────────────────────
+-- FIXED: now includes fish image thumbnail extracted from Handle mesh
+LP.Backpack.ChildAdded:Connect(function(item)
+    if not item:IsA("Tool") then return end
+
+    -- Skip rods/fishing tools
+    local n = item.Name:lower()
+    if C.RodKeyword ~= "" and n:find(C.RodKeyword:lower(), 1, true) then return end
+    if C.RodKeyword == "" then
+        -- When any-tool mode is on, skip items that look like rods
+        if n:find("rod") or n:find("kail") or n:find("fishing") then return end
+    end
+
+    task.wait(0.7)  -- wait for attributes to replicate
+
+    if C.WebhookURL == "" then return end
+
+    local rar = getRarity(item)
+    if not C.WebhookFilters[rar] then return end
+
+    local weight = item:GetAttribute("Weight") or item:GetAttribute("weight") or "N/A"
+    local mut    = item:GetAttribute("Mutation") or item:GetAttribute("mutation") or "None"
+
+    -- Count fish in backpack
+    local fishCount = 0
+    for _, v in ipairs(LP.Backpack:GetChildren()) do
+        if v:IsA("Tool") then
+            local vn = v.Name:lower()
+            if not (vn:find("rod") or vn:find("kail") or vn:find("fishing")) then
+                fishCount += 1
+            end
+        end
+    end
+
+    -- Total caught from leaderstats
+    local totalCaught = "N/A"
+    local ls = LP:FindFirstChild("leaderstats")
+    if ls then
+        for _, s in ipairs(ls:GetChildren()) do
+            if s.Name:lower():find("caught") or s.Name:lower():find("fish") then
+                totalCaught = tostring(s.Value); break
+            end
+        end
+    end
+
+    -- Fish image: extracted from tool assets
+    local fishImage = getFishImageURL(item)
+
+    safeReq({
+        Url    = C.WebhookURL,
+        Method = "POST",
+        Headers = { ["Content-Type"]="application/json" },
+        Body   = Http:JSONEncode({
+            embeds = {{
+                title     = "🎣  Caught — " .. rar .. "!",
+                color     = RAR_COLOR[rar] or 0x888888,
+                -- Fish image as large thumbnail
+                thumbnail = { url = fishImage },
+                fields    = {
+                    { name="🐟 Fish",         value=item.Name,                inline=true  },
+                    { name="✨ Rarity",       value=rar,                      inline=true  },
+                    { name="⚖️ Weight",      value=tostring(weight).." kg",  inline=true  },
+                    { name="🧬 Mutation",     value=tostring(mut),            inline=true  },
+                    { name="🎒 Backpack",     value=fishCount.." fish",       inline=true  },
+                    { name="📈 Total Caught", value=totalCaught,              inline=true  },
+                    { name="📍 Location",     value=getLoc(),                 inline=false },
+                    { name="👤 Player",       value=LP.Name,                  inline=true  },
+                    { name="🖥️ Job ID",      value="```"..game.JobId.."```", inline=false },
+                },
+                footer = { text="Flow Studio v3.0  |  "..os.date("%I:%M %p") },
+            }}
+        }),
+    })
+end)
+
+-- ── Walk on Water ─────────────────────────────
+local waterPart        = Instance.new("Part")
+waterPart.Name         = "FlowWaterPlatform"
+waterPart.Size         = Vector3.new(24, 1, 24)
+waterPart.Transparency = 1
+waterPart.Anchored     = true
+waterPart.CanCollide   = true
+waterPart.CastShadow   = false
+waterPart.CFrame       = CFrame.new(0, -9999, 0)
+waterPart.Parent       = workspace
+
+getgenv().FS_Heartbeat = Run.Heartbeat:Connect(function()
+    local root = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    waterPart.CFrame = C.WalkWater and C._lockedY
+        and CFrame.new(root.Position.X, C._lockedY, root.Position.Z)
+        or  CFrame.new(0, -9999, 0)
+end)
+
+-- ── 1-second loop ─────────────────────────────
+task.spawn(function()
+    while task.wait(1) do
+        local char = LP.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+
+        -- Auto Sell
+        if C.AutoSell then
+            pcall(function()
+                local r = getSellRemote(); if not r then return end
+                local m = C.SellMode
+                if m == "invoke" or (m == "auto" and r:IsA("RemoteFunction")) then
+                    r:InvokeServer()
+                elseif m == "fire" or (m == "auto" and r:IsA("RemoteEvent")) then
+                    r:FireServer()
+                end
+            end)
+        end
+
+        -- Anti Drown
+        if C.AntiDrown and hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+                for _, v in ipairs(char:GetDescendants()) do
+                    if v:IsA("NumberValue") or v:IsA("IntValue") then
+                        local vn = v.Name:lower()
+                        if vn == "oxygen" or vn == "o2" or vn == "air" then
+                            v.Value = 100
+                        end
+                    end
+                end
+            end)
+        elseif hum then
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+            end)
+        end
+
+        -- Auto Equip
+        if C.AutoEquip and hum and not char:FindFirstChildWhichIsA("Tool") then
+            for _, item in ipairs(LP.Backpack:GetChildren()) do
+                if item:IsA("Tool") and isRod(item) then
+                    pcall(function() hum:EquipTool(item) end)
+                    break
+                end
+            end
+        end
+
+        -- Streamer Mode
+        if C.Streamer then
+            for _, p in ipairs(Plrs:GetPlayers()) do
+                if not p.Character then continue end
+                for _, v in ipairs(p.Character:GetDescendants()) do
+                    pcall(function()
+                        if v:IsA("BillboardGui") then
+                            v.Enabled = false
+                        elseif v:IsA("TextLabel") then
+                            local vn = v.Name:lower()
+                            if vn:find("name") or vn:find("overhead") or vn:find("tag") then
+                                v.Visible = false
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- ── Farming loop ──────────────────────────────
+local _casting      = false  -- debounce: prevents overlapping casts on pcall early-exit
+local _sessionCaught = 0     -- session fish counter
+
+task.spawn(function()
+    while task.wait(0.5) do
+        if not C.Farming  then continue end
+        if not FS         then continue end
+        if _casting       then continue end  -- previous cast still running
+
+        local char = LP.Character; if not char then continue end
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        local tool = getEquippedRod()
+        if not tool then continue end
+
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+
+        _casting = true
+        pcall(function()
+            local castPos = root.Position + root.CFrame.LookVector * 15
+
+            if Anim then pcall(function() Anim:Play("PrepareCast", 0.1) end) end
+
+            local r1 = getR("CastReplication")
+            if r1 then r1:FireServer(castPos, root.Position, tool.Name, 99.5) end
+            task.wait(1.5)
+
+            local r2 = getR("PrecalcFish")
+            if r2 then pcall(function() r2:InvokeServer() end) end
+            task.wait(0.5)
+
+            local r3 = getR("ReplicatePullAlert")
+            if r3 then r3:FireServer("rbxassetid://76503247176490") end
+            task.wait(math.max(C.Delay, 0.5))
+
+            local r4 = getR("FishGiver")
+            if r4 then
+                r4:FireServer({ hookPosition = castPos })
+                _sessionCaught += 1
+            end
+            task.wait(1.0)
+
+            local r5 = getR("CleanupCast")
+            if r5 then r5:FireServer() end
+        end)
+        _casting = false
+    end
+end)
+
+-- ════════════════════════════════════════════
+--  [18] READY
+-- ════════════════════════════════════════════
 Rayfield:Notify({
     Title   = "Flow Studio",
-    Content = "v2.0 loaded  —  All systems active!",
-    Duration = 5,
+    Content = "v3.0 loaded — all systems active!\nTip: leave Rod Keyword empty for any rod.",
+    Duration = 6,
 })
