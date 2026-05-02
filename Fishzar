@@ -368,7 +368,7 @@ local lStatus = mkLabel(lCard, {
 -- Footer
 mkLabel(lCard, {
     Size=UDim2.new(1,0,0,12), Position=UDim2.new(0,0,1,-18),
-    Text="Owner: Dapz  •  Dev: Theo & Mon  •  "..execName,
+    Text="Dev: Theo  •  "..execName,
     TextColor3=Color3.fromRGB(38,38,38),
     Font=Enum.Font.Gotham, TextSize=9,
 })
@@ -1414,7 +1414,7 @@ Rayfield:Notify({
 })
 -- ╔═══════════════════════════════════════════════════════════════╗
 -- ║    FLOW STUDIO  |  FISHZAR  |  v3.0  |  NO KEY              ║
--- ║    Owner: Dapz  |  Developer: Theo & Mon                     ║
+-- ║                 Developer: Theo                             ║
 -- ╚═══════════════════════════════════════════════════════════════╝
 -- v3.0 Changes:
 --   [LOADER]   Parallel fetch — Rayfield loads while UI shows
@@ -1782,7 +1782,7 @@ local lStatus = mkLabel(lCard, {
 -- Footer
 mkLabel(lCard, {
     Size=UDim2.new(1,0,0,12), Position=UDim2.new(0,0,1,-18),
-    Text="Owner: Dapz  •  Dev: Theo & Mon  •  "..execName,
+    Text="Dev: Theo  •  "..execName,
     TextColor3=Color3.fromRGB(38,38,38),
     Font=Enum.Font.Gotham, TextSize=9,
 })
@@ -1953,7 +1953,7 @@ setP(0.88, "Populating tabs")
 -- ║  TAB: MAIN                           ║
 -- ╚══════════════════════════════════════╝
 T.Main:CreateSection("Flow Studio")
-T.Main:CreateLabel("v3.0  |  Owner: Dapz  •  Dev: Theo & Mon")
+T.Main:CreateLabel("v3.0  |  Dev: Theo")
 T.Main:CreateLabel("Executor: " .. execName)
 T.Main:CreateButton({
     Name = "Copy Discord Invite",
