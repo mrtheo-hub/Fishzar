@@ -1,6 +1,6 @@
 -- ╔═══════════════════════════════════════════════════════════════╗
 -- ║    FLOW STUDIO  |  FISHZAR  |  v3.0  |  NO KEY              ║
--- ║    Owner: Dapz  |  Developer: Theo & Mon                     ║
+-- ║   Developer: Theo                                           ║
 -- ╚═══════════════════════════════════════════════════════════════╝
 -- v3.0 Changes:
 --   [LOADER]   Parallel fetch — Rayfield loads while UI shows
@@ -539,7 +539,7 @@ setP(0.88, "Populating tabs")
 -- ║  TAB: MAIN                           ║
 -- ╚══════════════════════════════════════╝
 T.Main:CreateSection("Flow Studio")
-T.Main:CreateLabel("v3.0  |  Owner: Dapz  •  Dev: Theo & Mon")
+T.Main:CreateLabel("v3.0  | Dev: Theo")
 T.Main:CreateLabel("Executor: " .. execName)
 T.Main:CreateButton({
     Name = "Copy Discord Invite",
